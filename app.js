@@ -395,6 +395,27 @@ function pseudocodeToPython(pseudocode) {
             continue;
         }
 
+        // Handle variable type declarations: NUMERIC, STRING, BOOLEAN, etc.
+        if (/^(NUMERIC|INTEGER|FLOAT|REAL|STRING|CHAR|CHARACTER|BOOLEAN|BOOL)\s+(\w+)/i.test(line)) {
+            const match = line.match(/^(NUMERIC|INTEGER|FLOAT|REAL|STRING|CHAR|CHARACTER|BOOLEAN|BOOL)\s+(\w+)/i);
+            const typeDefaults = {
+                'NUMERIC': '0', 'INTEGER': '0', 'FLOAT': '0.0', 'REAL': '0.0',
+                'STRING': '""', 'CHAR': '""', 'CHARACTER': '""',
+                'BOOLEAN': 'False', 'BOOL': 'False'
+            };
+            const defaultVal = typeDefaults[match[1].toUpperCase()] || 'None';
+            pythonLines.push(indent(indentLevel) + `# ${match[1]} ${match[2]}`);
+            pythonLines.push(indent(indentLevel) + `${match[2]} = ${defaultVal}`);
+            continue;
+        }
+
+        // Handle direct assignment: variable = expression
+        if (/^(\w+)\s*=\s*(.+)$/i.test(line)) {
+            const match = line.match(/^(\w+)\s*=\s*(.+)$/);
+            pythonLines.push(indent(indentLevel) + `${match[1]} = ${translateExpr(match[2])}`);
+            continue;
+        }
+
         pythonLines.push(indent(indentLevel) + `# ${line}`);
     }
 
