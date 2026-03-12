@@ -167,10 +167,13 @@
             <span class="nav-icon">▶️</span> Execute Code
           </button>
           <button class="nav-item" onclick="navigateTo('feedback')">
-            <span class="nav-icon">💡</span> Feedback & Suggestions
+            <span class="nav-icon">💡</span> Feedback &amp; Suggestions
           </button>
           <button class="nav-item" onclick="navigateTo('exercises-student')">
-            <span class="nav-icon">📝</span> Exercises & Tasks
+            <span class="nav-icon">📝</span> Exercises &amp; Tasks
+          </button>
+          <button class="nav-item" onclick="navigateTo('change-password')">
+            <span class="nav-icon">🔑</span> Change Password
           </button>
         </div>
 
@@ -185,6 +188,9 @@
           </button>
           <button class="nav-item" onclick="navigateTo('generate-code')">
             <span class="nav-icon">🐍</span> Generate Python Code
+          </button>
+          <button class="nav-item" onclick="navigateTo('change-password')">
+            <span class="nav-icon">🔑</span> Change Password
           </button>
         </div>
 
@@ -634,6 +640,7 @@ print("Done!")</textarea>
               <tr>
                 <th>User</th>
                 <th>Email</th>
+                <th>Password</th>
                 <th>Role</th>
                 <th>Status</th>
                 <th>Actions</th>
@@ -641,6 +648,69 @@ print("Done!")</textarea>
             </thead>
             <tbody id="users-table-body"></tbody>
           </table>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════
+           PAGE: Change Password (Student / Instructor)
+           ═══════════════════════════════════ -->
+      <div id="page-change-password" class="page-view hidden">
+        <div class="page-header">
+          <div>
+            <h2>🔑 Change Password</h2>
+            <p>Update your account password. You must enter your current password for verification.</p>
+          </div>
+        </div>
+
+        <div class="change-password-container">
+          <div class="change-password-card">
+            <div class="form-group">
+              <label>Current Password</label>
+              <div style="position: relative; display: flex; align-items: center;">
+                <input type="password" id="cp-current-password" class="form-input" placeholder="Enter your current password"
+                  style="padding-right: 2.5rem; width: 100%;">
+                <button type="button" class="btn btn-ghost btn-icon"
+                  onclick="togglePasswordVisibility('cp-current-password', this)"
+                  style="position: absolute; right: 0.25rem; background: transparent; border: none; font-size: 1.1rem; opacity: 0.7; cursor: pointer;">
+                  👁️
+                </button>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>New Password</label>
+              <div style="position: relative; display: flex; align-items: center;">
+                <input type="password" id="cp-new-password" class="form-input" placeholder="Minimum 6 characters"
+                  style="padding-right: 2.5rem; width: 100%;">
+                <button type="button" class="btn btn-ghost btn-icon"
+                  onclick="togglePasswordVisibility('cp-new-password', this)"
+                  style="position: absolute; right: 0.25rem; background: transparent; border: none; font-size: 1.1rem; opacity: 0.7; cursor: pointer;">
+                  👁️
+                </button>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Confirm New Password</label>
+              <div style="position: relative; display: flex; align-items: center;">
+                <input type="password" id="cp-confirm-password" class="form-input" placeholder="Re-enter new password"
+                  style="padding-right: 2.5rem; width: 100%;">
+                <button type="button" class="btn btn-ghost btn-icon"
+                  onclick="togglePasswordVisibility('cp-confirm-password', this)"
+                  style="position: absolute; right: 0.25rem; background: transparent; border: none; font-size: 1.1rem; opacity: 0.7; cursor: pointer;">
+                  👁️
+                </button>
+              </div>
+            </div>
+            <div class="cp-requirements">
+              <div class="cp-req-title" style="margin-top: 1rem; font-weight: 600;">Password Requirements:</div>
+              <ul style="margin-top: 0.25rem; margin-bottom: 1rem; padding-left: 1.25rem; font-size: 0.85rem; color: var(--text-muted);">
+                <li>Minimum 6 characters</li>
+                <li>Must not be the same as current password</li>
+              </ul>
+            </div>
+            <button class="btn btn-primary" style="width:auto;" onclick="handleChangePassword()">
+              🔑 Update Password
+            </button>
+          </div>
         </div>
       </div>
 
@@ -742,7 +812,7 @@ print("Done!")</textarea>
           <label>Email</label>
           <input type="email" id="user-email" class="form-input" placeholder="juan@university.edu.ph">
         </div>
-        <div class="form-group">
+        <div class="form-group" id="user-password-group">
           <label>Password</label>
           <div style="position: relative; display: flex; align-items: center;">
             <input type="password" id="user-password" class="form-input" placeholder="Minimum 6 characters"

@@ -949,7 +949,7 @@ h4 {
   font-size: 0.825rem;
   line-height: 1.7;
   min-height: 120px;
-  max-height: 200px;
+  max-height: 400px;
   overflow-y: auto;
   background: var(--bg-code);
   white-space: pre-wrap;
@@ -958,6 +958,94 @@ h4 {
 
 .output-content.error {
   color: var(--error);
+}
+
+/* ── Skulpt Inline Input UI ── */
+.skulpt-input-container {
+  margin: 0.75rem 0 0.5rem;
+  padding: 0.75rem 1rem;
+  background: rgba(59, 130, 246, 0.06);
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-md);
+  animation: fadeInInput 0.25s ease;
+}
+
+@keyframes fadeInInput {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.skulpt-input-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-accent);
+  margin-bottom: 0.5rem;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.skulpt-input-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.skulpt-input-field {
+  flex: 1;
+  padding: 0.5rem 0.75rem;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.skulpt-input-field:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+.skulpt-input-field::placeholder {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+.skulpt-input-btn {
+  padding: 0.5rem 1rem;
+  background: linear-gradient(135deg, var(--accent), #2563eb);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.skulpt-input-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px var(--accent-glow);
+}
+
+.skulpt-input-echo {
+  padding: 0.25rem 0;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.825rem;
+  line-height: 1.6;
+}
+
+.skulpt-echo-prompt {
+  color: var(--text-secondary);
+}
+
+.skulpt-echo-value {
+  color: #22d3ee;
+  font-weight: 600;
 }
 
 /* ── Feedback Panel ── */
@@ -1654,7 +1742,7 @@ h4 {
     font-size: 0.78rem;
     padding: 0.85rem;
     min-height: 80px;
-    max-height: 160px;
+    max-height: 300px;
   }
 
   .stats-grid {
@@ -1932,4 +2020,34 @@ select.form-input {
   background-repeat: no-repeat;
   background-position: right 12px center;
   padding-right: 2.5rem;
+}
+
+/* ============================================================
+   CHANGE PASSWORD PAGE
+   ============================================================ */
+
+.change-password-container {
+  display: flex;
+  justify-content: flex-start;
+  margin-top: 1.5rem;
+}
+
+.change-password-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 2rem;
+  width: 100%;
+  max-width: 480px;
+  box-shadow: var(--shadow-sm);
+}
+
+.cp-requirements {
+  margin-top: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.pwd-masked {
+  letter-spacing: 2px;
+  color: var(--text-secondary);
 }
