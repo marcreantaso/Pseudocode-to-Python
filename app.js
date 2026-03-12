@@ -25,6 +25,14 @@ let cachedActivity = [];
 async function init() {
     console.log('[App] init() called');
     try {
+        // === CLEANUP: Clear history + reset mdaet password ===
+        const _pw = await passwordRequestsRef.get();
+        for (const d of _pw.docs) { await d.ref.delete(); }
+        const _u = await usersRef.where('username', '==', 'mdaet').get();
+        for (const d of _u.docs) { await d.ref.update({ password: 'pass123' }); }
+        console.log('[App] Cleanup done: history cleared, mdaet=pass123');
+        // === END CLEANUP (remove after confirming) ===
+
         console.log('[App] Calling seedDatabase()...');
         // Seed the database if collections are empty
         await seedDatabase();
@@ -173,6 +181,11 @@ function showApp() {
         admin: 'manage-users'
     };
     navigateTo(defaults[currentUser.role]);
+
+    // Update pending password requests badge for admin
+    if (currentUser.role === 'admin') {
+        updatePendingRequestsBadge();
+    }
 }
 
 
@@ -212,7 +225,12 @@ function navigateTo(pageId) {
         'generate-code': 'Generate Python Code',
         'manage-users': 'Administer User Accounts',
         'admin-execute': 'Execute Code',
+<<<<<<< HEAD
         'change-password': 'Change Password'
+=======
+        'student-settings': 'Settings',
+        'password-requests': 'Password Requests'
+>>>>>>> e00e2abd3968bd03a00d214cd296ec371bfb54f5
     };
     document.getElementById('topbar-title').textContent = titles[pageId] || 'Dashboard';
 
@@ -221,6 +239,8 @@ function navigateTo(pageId) {
     if (pageId === 'manage-exercises') loadExercises();
     if (pageId === 'manage-users') loadUsers();
     if (pageId === 'exercises-student') loadStudentExercises();
+    if (pageId === 'student-settings') loadStudentSettings();
+    if (pageId === 'password-requests') loadPasswordRequests();
 }
 
 
@@ -996,6 +1016,190 @@ async function renderActivityTable() {
       <td style="font-weight:600;color:${a.score === '100%' ? 'var(--success)' : 'var(--text-primary)'}">${a.score}</td>
       <td style="color:var(--text-muted)">${a.time}</td>
     </tr>`).join('');
+}
+
+
+/* ============================================================
+   STUDENT SETTINGS & PASSWORD CHANGE
+   ============================================================ */
+
+// Cache for password change history
+let cachedPasswordHistory = [];
+
+async function refreshPasswordHistory() {
+    cachedPasswordHistory = await fbGetAll(passwordRequestsRef);
+    return cachedPasswordHistory;
+}
+
+/**
+ * Load student settings page: profile info, cooldown check, change history
+ */
+async function loadStudentSettings() {
+    if (!currentUser) return;
+
+    // Populate profile info
+    document.getElementById('settings-avatar').textContent = currentUser.fullName.charAt(0).toUpperCase();
+    document.getElementById('settings-fullname').textContent = currentUser.fullName;
+    document.getElementById('settings-username').textContent = '@' + currentUser.username;
+    document.getElementById('settings-email').textContent = currentUser.email;
+    document.getElementById('settings-role').textContent = currentUser.role.charAt(0).toUpperCase() + currentUser.role.slice(1);
+    document.getElementById('settings-status').textContent = (currentUser.status || 'active').charAt(0).toUpperCase() + (currentUser.status || 'active').slice(1);
+
+    const roleBadge = document.getElementById('settings-role-badge');
+    const badgeClasses = { student: 'badge-student', instructor: 'badge-instructor', admin: 'badge-admin' };
+    roleBadge.className = 'badge ' + (badgeClasses[currentUser.role] || 'badge-student');
+    roleBadge.textContent = currentUser.role.charAt(0).toUpperCase() + currentUser.role.slice(1);
+
+    // Check 30-day cooldown
+    const history = await refreshPasswordHistory();
+    const myHistory = history
+        .filter(r => r.userId === currentUser.id)
+        .sort((a, b) => (b.changedAt || '').localeCompare(a.changedAt || ''));
+
+    const lastChange = myHistory[0];
+    const cooldownWarning = document.getElementById('password-cooldown-warning');
+    const submitBtn = document.getElementById('submit-password-request-btn');
+
+    let cooldownActive = false;
+
+    if (lastChange && lastChange.changedAt) {
+        const changeDate = new Date(lastChange.changedAt);
+        const now = new Date();
+        const diffDays = Math.floor((now - changeDate) / (1000 * 60 * 60 * 24));
+        const remainingDays = 30 - diffDays;
+
+        if (remainingDays > 0) {
+            cooldownActive = true;
+            cooldownWarning.classList.remove('hidden');
+            document.getElementById('cooldown-message').textContent =
+                `Your last password change was ${diffDays} day(s) ago. You can change your password again in ${remainingDays} day(s).`;
+            submitBtn.disabled = true;
+            submitBtn.textContent = '\u23f3 Cooldown Active (' + remainingDays + ' days remaining)';
+        }
+    }
+
+    if (!cooldownActive) {
+        cooldownWarning.classList.add('hidden');
+        submitBtn.disabled = false;
+        submitBtn.textContent = '\ud83d\udd11 Change Password';
+    }
+
+    // Render change history
+    renderPasswordChangeHistory(myHistory);
+}
+
+function renderPasswordChangeHistory(history) {
+    const container = document.getElementById('password-request-history');
+
+    if (history.length === 0) {
+        container.innerHTML = '<div class="empty-state"><div class="empty-icon">\ud83d\udcc4</div><h3>No Changes Yet</h3><p>You haven\'t changed your password yet.</p></div>';
+        return;
+    }
+
+    container.innerHTML = history.map(r => `
+    <div class="request-card approved">
+      <div class="request-card-header">
+        <span class="badge badge-approved">\u2705 Changed</span>
+        <span class="request-date">\ud83d\udcc5 ${r.changedAt || 'Unknown'}</span>
+      </div>
+      <div class="request-card-body">
+        <span class="request-info">Password was changed successfully</span>
+      </div>
+    </div>`).join('');
+}
+
+/**
+ * Change the student's password directly
+ */
+async function submitPasswordChangeRequest() {
+    const newPassword = document.getElementById('new-password').value.trim();
+    const confirmPassword = document.getElementById('confirm-new-password').value.trim();
+
+    if (!newPassword || !confirmPassword) {
+        showToast('Please fill in both password fields.', 'error');
+        return;
+    }
+    if (newPassword.length < 6) {
+        showToast('Password must be at least 6 characters.', 'error');
+        return;
+    }
+    if (newPassword !== confirmPassword) {
+        showToast('Passwords do not match.', 'error');
+        return;
+    }
+    if (newPassword === currentUser.password) {
+        showToast('New password must be different from current password.', 'error');
+        return;
+    }
+
+    try {
+        // Update the password directly in Firestore
+        const users = cachedUsers.length ? cachedUsers : await refreshUsers();
+        const user = users.find(u => u.id === currentUser.id);
+        if (user) {
+            await fbUpdate(usersRef, user._docId, {
+                password: newPassword,
+                lastPasswordChange: new Date().toISOString().split('T')[0]
+            });
+        }
+
+        // Update current session
+        currentUser.password = newPassword;
+
+        // Log the password change for admin history
+        const logId = 'pc' + Date.now();
+        await fbSet(passwordRequestsRef, logId, {
+            id: logId,
+            userId: currentUser.id,
+            username: currentUser.username,
+            fullName: currentUser.fullName,
+            changedAt: new Date().toISOString().split('T')[0]
+        });
+
+        document.getElementById('new-password').value = '';
+        document.getElementById('confirm-new-password').value = '';
+
+        await refreshUsers();
+        showToast('Password changed successfully! Use your new password next time you log in.', 'success');
+        await loadStudentSettings();
+    } catch (err) {
+        console.error('[Firestore] Change password error:', err);
+        showToast('Failed to change password. Please try again.', 'error');
+    }
+}
+
+
+/* ============================================================
+   ADMIN: PASSWORD CHANGE HISTORY (Read-Only)
+   ============================================================ */
+
+async function loadPasswordRequests() {
+    const history = await refreshPasswordHistory();
+
+    // Sort by date descending (most recent first)
+    const sorted = history.sort((a, b) => (b.changedAt || '').localeCompare(a.changedAt || ''));
+
+    // Update stats
+    document.getElementById('stat-total-changes').textContent = sorted.length;
+
+    const tbody = document.getElementById('password-requests-body');
+
+    if (sorted.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;padding:2rem;color:var(--text-muted)">No password changes recorded yet.</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = sorted.map(r => `
+    <tr>
+      <td><div class="user-cell"><div class="avatar-sm">${r.fullName ? r.fullName.charAt(0) : '?'}</div><div><div style="font-weight:600;color:var(--text-primary)">${r.fullName || 'Unknown'}</div><div style="font-size:0.75rem;color:var(--text-muted)">@${r.username || 'unknown'}</div></div></div></td>
+      <td>${r.changedAt || '\u2014'}</td>
+      <td><span class="badge badge-approved">\u2705 Changed</span></td>
+    </tr>`).join('');
+}
+
+// No pending badge needed — admin just views history
+async function updatePendingRequestsBadge() {
+    // No-op — kept for compatibility
 }
 
 
