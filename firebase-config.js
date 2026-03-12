@@ -24,6 +24,7 @@ const db = firebase.firestore();
 const usersRef = db.collection("users");
 const exercisesRef = db.collection("exercises");
 const activityRef = db.collection("activity");
+const passwordRequestsRef = db.collection("passwordRequests");
 
 console.log('[Firebase] Initialized with project:', firebaseConfig.projectId);
 
