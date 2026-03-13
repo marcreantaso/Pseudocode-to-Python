@@ -1112,6 +1112,45 @@ async function updatePendingRequestsBadge() {
 
 
 /* ============================================================
+   UPLOAD PSEUDOCODE
+   ============================================================ */
+
+/**
+ * Trigger the hidden file input to upload a pseudocode file
+ */
+function uploadPseudocode() {
+    document.getElementById('pseudocode-file-input').click();
+}
+
+/**
+ * Handle the uploaded file and load its content into the editor
+ */
+function handlePseudocodeUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function (e) {
+        const content = e.target.result;
+        document.getElementById('pseudocode-editor').value = content;
+
+        // Update line count
+        const lines = content.split('\n').length;
+        document.getElementById('line-count').textContent = lines + ' lines';
+
+        showToast(`File "${file.name}" loaded successfully!`, 'success');
+    };
+    reader.onerror = function () {
+        showToast('Failed to read the file. Please try again.', 'error');
+    };
+    reader.readAsText(file);
+
+    // Reset the input so the same file can be re-uploaded if needed
+    event.target.value = '';
+}
+
+
+/* ============================================================
    UTILITY FUNCTIONS
    ============================================================ */
 
