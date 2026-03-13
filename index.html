@@ -277,6 +277,11 @@ END</textarea>
               <button class="btn btn-secondary btn-sm" onclick="clearEditor()">
                 🗑️ Clear
               </button>
+              <button class="btn btn-secondary btn-sm" onclick="uploadPseudocode()">
+                📂 Upload
+              </button>
+              <input type="file" id="pseudocode-file-input" accept=".txt,.pseudo,.ps,.text" style="display:none"
+                onchange="handlePseudocodeUpload(event)">
               <span style="margin-left:auto;font-size:0.75rem;color:var(--text-muted)" id="line-count">15 lines</span>
             </div>
           </div>
@@ -744,18 +749,25 @@ print("Done!")</textarea>
             <div class="form-group">
               <label>New Password</label>
               <div style="position: relative; display: flex; align-items: center;">
-                <input type="password" id="new-password" class="form-input" placeholder="Enter new password (min 6 characters)" style="padding-right: 2.5rem; width: 100%;">
-                <button type="button" class="btn btn-ghost btn-icon" onclick="togglePasswordVisibility('new-password', this)" style="position: absolute; right: 0.25rem; background: transparent; border: none; font-size: 1.1rem; opacity: 0.7; cursor: pointer;">👁️</button>
+                <input type="password" id="new-password" class="form-input"
+                  placeholder="Enter new password (min 6 characters)" style="padding-right: 2.5rem; width: 100%;">
+                <button type="button" class="btn btn-ghost btn-icon"
+                  onclick="togglePasswordVisibility('new-password', this)"
+                  style="position: absolute; right: 0.25rem; background: transparent; border: none; font-size: 1.1rem; opacity: 0.7; cursor: pointer;">👁️</button>
               </div>
             </div>
             <div class="form-group">
               <label>Confirm New Password</label>
               <div style="position: relative; display: flex; align-items: center;">
-                <input type="password" id="confirm-new-password" class="form-input" placeholder="Re-enter new password" style="padding-right: 2.5rem; width: 100%;">
-                <button type="button" class="btn btn-ghost btn-icon" onclick="togglePasswordVisibility('confirm-new-password', this)" style="position: absolute; right: 0.25rem; background: transparent; border: none; font-size: 1.1rem; opacity: 0.7; cursor: pointer;">👁️</button>
+                <input type="password" id="confirm-new-password" class="form-input" placeholder="Re-enter new password"
+                  style="padding-right: 2.5rem; width: 100%;">
+                <button type="button" class="btn btn-ghost btn-icon"
+                  onclick="togglePasswordVisibility('confirm-new-password', this)"
+                  style="position: absolute; right: 0.25rem; background: transparent; border: none; font-size: 1.1rem; opacity: 0.7; cursor: pointer;">👁️</button>
               </div>
             </div>
-            <button class="btn btn-primary" style="width:auto" id="submit-password-request-btn" onclick="submitPasswordChangeRequest()">
+            <button class="btn btn-primary" style="width:auto" id="submit-password-request-btn"
+              onclick="submitPasswordChangeRequest()">
               🔑 Change Password
             </button>
           </div>
