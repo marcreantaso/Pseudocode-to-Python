@@ -377,14 +377,22 @@ function pseudocodeToPython(pseudocode) {
             continue;
         }
 
-        if (/^(DISPLAY|PRINT|OUTPUT)\s*\(\s*new\s*line\s*\)$/i.test(line)) {
+        if (/^(DISPLAY|PRINT|OUTPUT)\s*\(\s*\(\s*new\s*line\s*\)\s*\)$/i.test(line) || /^(DISPLAY|PRINT|OUTPUT)\s*\(\s*new\s*line\s*\)$/i.test(line)) {
             pythonLines.push(indent(indentLevel) + `print()`);
             continue;
         }
 
-        if (/^(DISPLAY|PRINT|OUTPUT)\s+(.*?)\s*\(\s*continue\s*on\s*same\s*line\s*\)$/i.test(line)) {
-            const match = line.match(/^(DISPLAY|PRINT|OUTPUT)\s+(.*?)\s*\(\s*continue\s*on\s*same\s*line\s*\)$/i);
+        const continueRegex = /^(DISPLAY|PRINT|OUTPUT)\s*\((.*?)\s*\(\s*continue\s*on\s*same\s*line\s*\)\)$/i;
+        const continueRegex2 = /^(DISPLAY|PRINT|OUTPUT)\s+(.*?)\s*\(\s*continue\s*on\s*same\s*line\s*\)$/i;
+        if (continueRegex.test(line) || continueRegex2.test(line)) {
+            const match = line.match(continueRegex) || line.match(continueRegex2);
             pythonLines.push(indent(indentLevel) + `print(${translateExpr(match[2])}, end="")`);
+            continue;
+        }
+
+        if (/^(DISPLAY|PRINT|OUTPUT)\s*\((.+)\)$/i.test(line)) {
+            const match = line.match(/^(DISPLAY|PRINT|OUTPUT)\s*\((.+)\)$/i);
+            pythonLines.push(indent(indentLevel) + `print(${translateExpr(match[2])})`);
             continue;
         }
 
