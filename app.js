@@ -60,6 +60,9 @@ async function init() {
             document.getElementById('line-count').textContent = lines + ' lines';
         });
     }
+
+    // Setup real-time validation
+    setupRealtimeValidation();
 }
 
 function updateClock() {
@@ -251,13 +254,30 @@ function translatePseudocode() {
         return;
     }
 
+    const validation = validatePseudocode(input);
+    const output = document.getElementById('console-output');
+    const runBtn = document.querySelector('#page-write-pseudocode .btn-success');
+
+    if (!validation.valid) {
+        // Output errors as Python comments — only in the Python Output panel
+        const errorOutput = formatValidationErrors(validation.errors);
+        document.getElementById('python-output').value = errorOutput;
+
+        output.className = 'output-content error';
+        output.textContent = `❌ ${validation.errors.length} syntax error(s) found. Fix them before translating.`;
+
+        if (runBtn) runBtn.disabled = true;
+        showToast(`${validation.errors.length} syntax error(s) found. Check the Python Output panel.`, 'error');
+        return;
+    }
+
     const python = pseudocodeToPython(input);
     document.getElementById('python-output').value = python;
 
-    const output = document.getElementById('console-output');
     output.className = 'output-content';
-    output.textContent = '✅ Translation complete! Click "Run Code" to execute.';
+    output.textContent = '✅ Pseudocode translated successfully! Click "Run Code" to execute.';
 
+    if (runBtn) runBtn.disabled = false;
     showToast('Pseudocode translated to Python successfully!', 'success');
 }
 
@@ -267,6 +287,14 @@ function translateFromPage() {
         showToast('Please write some pseudocode first.', 'error');
         return;
     }
+
+    const validation = validatePseudocode(input);
+    if (!validation.valid) {
+        document.getElementById('translate-output').value = formatValidationErrors(validation.errors);
+        showToast(`${validation.errors.length} syntax error(s) found.`, 'error');
+        return;
+    }
+
     const python = pseudocodeToPython(input);
     document.getElementById('translate-output').value = python;
     showToast('Translation complete!', 'success');
@@ -278,6 +306,14 @@ function instructorTranslate() {
         showToast('Please write some pseudocode first.', 'error');
         return;
     }
+
+    const validation = validatePseudocode(input);
+    if (!validation.valid) {
+        document.getElementById('instructor-python-output').value = formatValidationErrors(validation.errors);
+        showToast(`${validation.errors.length} syntax error(s) found.`, 'error');
+        return;
+    }
+
     const python = pseudocodeToPython(input);
     document.getElementById('instructor-python-output').value = python;
     showToast('Python code generated!', 'success');
@@ -1205,6 +1241,413 @@ function downloadPython() {
     URL.revokeObjectURL(url);
     showToast('Python file downloaded!', 'success');
 }
+
+
+/* ============================================================
+   PSEUDOCODE SYNTAX VALIDATION ENGINE
+   Stack-based strict validation with educational error messages
+   ============================================================ */
+
+/**
+ * Known pseudocode keywords whitelist.
+ * Used to detect typos / unknown keywords.
+ */
+const KNOWN_KEYWORDS = [
+    'BEGIN', 'END', 'SET', 'TO', 'DISPLAY', 'PRINT', 'OUTPUT',
+    'IF', 'THEN', 'ELSE', 'END IF',
+    'FOR', 'EACH', 'IN', 'DO', 'FROM', 'TO', 'END FOR',
+    'WHILE', 'END WHILE',
+    'FUNCTION', 'PROCEDURE', 'RETURN', 'CALL', 'END FUNCTION', 'END PROCEDURE',
+    'INPUT', 'READ', 'WITH', 'PROMPT',
+    'INCREMENT', 'DECREMENT', 'APPEND',
+    'AND', 'OR', 'NOT', 'MOD', 'TRUE', 'FALSE', 'NULL',
+    'NUMERIC', 'INTEGER', 'FLOAT', 'REAL', 'STRING', 'CHAR', 'CHARACTER', 'BOOLEAN', 'BOOL'
+];
+
+/**
+ * Simple Levenshtein distance for typo suggestions
+ */
+function levenshtein(a, b) {
+    const matrix = [];
+    for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+    for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+    for (let i = 1; i <= b.length; i++) {
+        for (let j = 1; j <= a.length; j++) {
+            if (b[i - 1] === a[j - 1]) {
+                matrix[i][j] = matrix[i - 1][j - 1];
+            } else {
+                matrix[i][j] = Math.min(
+                    matrix[i - 1][j - 1] + 1,
+                    matrix[i][j - 1] + 1,
+                    matrix[i - 1][j] + 1
+                );
+            }
+        }
+    }
+    return matrix[b.length][a.length];
+}
+
+/**
+ * Suggest a keyword if a typo is detected
+ */
+function suggestKeyword(word) {
+    const upper = word.toUpperCase();
+    const displayKeywords = ['DISPLAY', 'PRINT', 'OUTPUT', 'SET', 'IF', 'ELSE', 'FOR', 'WHILE',
+        'BEGIN', 'END', 'THEN', 'DO', 'EACH', 'FROM', 'RETURN', 'CALL',
+        'FUNCTION', 'PROCEDURE', 'INPUT', 'READ', 'INCREMENT', 'DECREMENT', 'APPEND'];
+
+    let bestMatch = null;
+    let bestDist = Infinity;
+
+    for (const kw of displayKeywords) {
+        const dist = levenshtein(upper, kw);
+        if (dist < bestDist && dist <= 2 && dist > 0) {
+            bestDist = dist;
+            bestMatch = kw;
+        }
+    }
+    return bestMatch;
+}
+
+/**
+ * Core validation function — strict compiler-like approach.
+ * Validates BEFORE any translation occurs.
+ * Returns { valid: boolean, errors: [{ line: number, message: string, suggestion?: string }] }
+ */
+function validatePseudocode(code) {
+    const lines = code.split('\n');
+    const errors = [];
+    const blockStack = [];
+
+    // --- PHASE 1: Find BEGIN and END positions ---
+    const meaningfulLines = [];
+    for (let i = 0; i < lines.length; i++) {
+        const t = lines[i].trim();
+        if (t && !t.startsWith('//') && !t.startsWith('#')) {
+            meaningfulLines.push({ index: i, lineNum: i + 1, text: t });
+        }
+    }
+
+    if (meaningfulLines.length === 0) {
+        errors.push({ line: 1, message: 'Empty pseudocode.', suggestion: 'Start with BEGIN and end with END.' });
+        return { valid: false, errors };
+    }
+
+    const firstMeaningful = meaningfulLines[0];
+    const lastMeaningful = meaningfulLines[meaningfulLines.length - 1];
+
+    let hasBegin = false, beginLineNum = -1;
+    let hasEnd = false, endLineNum = -1;
+
+    for (const ml of meaningfulLines) {
+        if (/^BEGIN$/i.test(ml.text)) {
+            if (!hasBegin) { hasBegin = true; beginLineNum = ml.lineNum; }
+            else { errors.push({ line: ml.lineNum, message: 'Duplicate BEGIN statement found. Only one BEGIN is allowed.' }); }
+        }
+        if (/^END$/i.test(ml.text)) { hasEnd = true; endLineNum = ml.lineNum; }
+    }
+
+    // Strict: BEGIN must be first meaningful line
+    if (!hasBegin) {
+        errors.push({ line: firstMeaningful.lineNum, message: 'Missing BEGIN statement.', suggestion: 'Your pseudocode must start with BEGIN on the first line.' });
+    } else if (beginLineNum !== firstMeaningful.lineNum) {
+        errors.push({ line: beginLineNum, message: 'BEGIN must be the first line of your pseudocode.', suggestion: 'Move BEGIN to the very first line.' });
+    }
+
+    // Strict: END must be last meaningful line
+    if (!hasEnd) {
+        errors.push({ line: lastMeaningful.lineNum, message: 'Missing END statement.', suggestion: 'Your pseudocode must end with END on the last line.' });
+    } else if (endLineNum !== lastMeaningful.lineNum) {
+        errors.push({ line: endLineNum, message: 'END must be the last line of your pseudocode.', suggestion: 'Move END to the very last line. No code should appear after END.' });
+    }
+
+    // Detect END before BEGIN
+    if (hasBegin && hasEnd && endLineNum < beginLineNum) {
+        errors.push({ line: endLineNum, message: 'END found before BEGIN — structure is inverted.', suggestion: 'BEGIN must come first, END must come last.' });
+    }
+
+    // Detect code outside BEGIN-END block
+    if (hasBegin && hasEnd && beginLineNum < endLineNum) {
+        for (const ml of meaningfulLines) {
+            if (/^BEGIN$/i.test(ml.text) || /^END$/i.test(ml.text)) continue;
+            if (ml.lineNum < beginLineNum || ml.lineNum > endLineNum) {
+                errors.push({ line: ml.lineNum, message: 'Code found outside BEGIN-END block.', suggestion: 'All pseudocode must be written between BEGIN and END.' });
+            }
+        }
+    } else if (!hasBegin && hasEnd) {
+        for (const ml of meaningfulLines) {
+            if (/^END$/i.test(ml.text)) continue;
+            if (ml.lineNum < endLineNum) {
+                errors.push({ line: ml.lineNum, message: 'Code found before BEGIN (which is missing).', suggestion: 'Add BEGIN as the first line.' });
+            }
+        }
+    }
+
+    // If BEGIN/END structure is completely broken, return early
+    if (!hasBegin || !hasEnd) {
+        errors.sort((a, b) => a.line - b.line);
+        return { valid: false, errors };
+    }
+
+    // --- PHASE 2: Validate lines inside BEGIN-END ---
+    for (let i = 0; i < lines.length; i++) {
+        const lineNum = i + 1;
+        const trimmed = lines[i].trim();
+
+        if (!trimmed || trimmed.startsWith('//') || trimmed.startsWith('#')) continue;
+        if (/^BEGIN$/i.test(trimmed) || /^END$/i.test(trimmed)) continue;
+        if (lineNum < beginLineNum || lineNum > endLineNum) continue;
+
+        // Block closers
+        const endBlockMatch = trimmed.match(/^END\s+(IF|FOR|WHILE|FUNCTION|PROCEDURE)$/i);
+        if (endBlockMatch) {
+            const closer = endBlockMatch[1].toUpperCase();
+            if (blockStack.length === 0) {
+                errors.push({ line: lineNum, message: `Unexpected END ${closer} — no matching opening block found.`, suggestion: `Remove this END ${closer} or add the matching ${closer} block above.` });
+            } else {
+                const top = blockStack[blockStack.length - 1];
+                if (top.type === closer) { blockStack.pop(); }
+                else {
+                    errors.push({ line: lineNum, message: `Mismatched block: Expected END ${top.type} (opened on line ${top.line}) but found END ${closer}.`, suggestion: `Close the ${top.type} block with END ${top.type} before END ${closer}.` });
+                    const deeper = blockStack.findIndex(b => b.type === closer);
+                    if (deeper !== -1) {
+                        for (let k = blockStack.length - 1; k > deeper; k--) {
+                            errors.push({ line: blockStack[k].line, message: `Unclosed ${blockStack[k].type} block (opened on line ${blockStack[k].line}).`, suggestion: `Add END ${blockStack[k].type} to close this block.` });
+                        }
+                        blockStack.splice(deeper);
+                    }
+                }
+            }
+            continue;
+        }
+
+        // Block openers
+        if (/^IF\s+(.+)\s+THEN$/i.test(trimmed) || /^ELSE\s+IF\s+(.+)\s+THEN$/i.test(trimmed)) {
+            if (/^IF\s+(.+)\s+THEN$/i.test(trimmed)) blockStack.push({ type: 'IF', line: lineNum });
+            const condMatch = trimmed.match(/^(?:ELSE\s+)?IF\s+(.+)\s+THEN$/i);
+            if (condMatch && !condMatch[1].trim()) errors.push({ line: lineNum, message: 'IF statement has an empty condition.', suggestion: 'Add a condition, e.g. IF x > 5 THEN' });
+            checkIncompleteExpression(trimmed, lineNum, errors);
+            continue;
+        }
+        if (/^ELSE$/i.test(trimmed)) {
+            if (blockStack.length === 0 || blockStack[blockStack.length - 1].type !== 'IF') errors.push({ line: lineNum, message: 'ELSE without a matching IF block.', suggestion: 'Make sure ELSE is inside an IF...END IF block.' });
+            continue;
+        }
+        if (/^FOR\s+EACH\s+\w+\s+IN\s+.+\s+DO$/i.test(trimmed) || /^FOR\s+\w+\s+FROM\s+.+\s+TO\s+.+\s+DO$/i.test(trimmed)) { blockStack.push({ type: 'FOR', line: lineNum }); continue; }
+        if (/^WHILE\s+(.+)\s+DO$/i.test(trimmed)) { blockStack.push({ type: 'WHILE', line: lineNum }); continue; }
+        if (/^(FUNCTION|PROCEDURE)\s+\w+\s*\(.*\)$/i.test(trimmed)) { blockStack.push({ type: trimmed.match(/^(FUNCTION|PROCEDURE)/i)[1].toUpperCase(), line: lineNum }); continue; }
+
+        // Known statements with expression validation
+        if (/^SET\s+\w+\s+TO\s+/i.test(trimmed)) { const m = trimmed.match(/^SET\s+\w+\s+TO\s+(.+)$/i); if (m) checkIncompleteExpression(m[1], lineNum, errors); continue; }
+        if (/^(DISPLAY|PRINT|OUTPUT)\s+/i.test(trimmed)) { const m = trimmed.match(/^(?:DISPLAY|PRINT|OUTPUT)\s+(.+)$/i); if (m) checkIncompleteExpression(m[1], lineNum, errors); continue; }
+        if (/^(INPUT|READ)\s+/i.test(trimmed)) continue;
+        if (/^RETURN\s+/i.test(trimmed)) { const m = trimmed.match(/^RETURN\s+(.+)$/i); if (m) checkIncompleteExpression(m[1], lineNum, errors); continue; }
+        if (/^CALL\s+\w+\s*\(.*\)$/i.test(trimmed)) continue;
+        if (/^(INCREMENT|DECREMENT)\s+\w+$/i.test(trimmed)) continue;
+        if (/^APPEND\s+.+\s+TO\s+\w+$/i.test(trimmed)) continue;
+        if (/^(NUMERIC|INTEGER|FLOAT|REAL|STRING|CHAR|CHARACTER|BOOLEAN|BOOL)\s+\w+/i.test(trimmed)) continue;
+        if (/^\w+\s*=\s*.+$/.test(trimmed)) { const m = trimmed.match(/^\w+\s*=\s*(.+)$/); if (m) checkIncompleteExpression(m[1], lineNum, errors); continue; }
+
+        // Incomplete block syntax
+        if (/^FOR\s+/i.test(trimmed) && !/DO$/i.test(trimmed)) { errors.push({ line: lineNum, message: 'FOR statement is missing "DO" at the end.', suggestion: 'Use: FOR EACH item IN list DO  or  FOR i FROM 1 TO 10 DO' }); blockStack.push({ type: 'FOR', line: lineNum }); continue; }
+        if (/^IF\s+/i.test(trimmed) && !/THEN$/i.test(trimmed)) { errors.push({ line: lineNum, message: 'IF statement is missing "THEN" at the end.', suggestion: 'Use: IF condition THEN' }); blockStack.push({ type: 'IF', line: lineNum }); continue; }
+        if (/^WHILE\s+/i.test(trimmed) && !/DO$/i.test(trimmed)) { errors.push({ line: lineNum, message: 'WHILE statement is missing "DO" at the end.', suggestion: 'Use: WHILE condition DO' }); blockStack.push({ type: 'WHILE', line: lineNum }); continue; }
+
+        // --- STRICT unknown keyword rejection ---
+        const firstWord = trimmed.split(/\s+/)[0];
+        const firstWordUpper = firstWord.toUpperCase();
+
+        if (/^[A-Z]{2,}$/i.test(firstWord) && !KNOWN_KEYWORDS.includes(firstWordUpper)) {
+            const suggestion = suggestKeyword(firstWord);
+            errors.push({
+                line: lineNum,
+                message: `Unknown keyword "${firstWord}".`,
+                suggestion: suggestion ? `Did you mean "${suggestion}"?` : 'Check spelling or use a valid keyword: SET, DISPLAY, IF, FOR, WHILE, etc.'
+            });
+            continue;
+        }
+
+        // If it doesn't match any known pattern, flag it
+        if (!KNOWN_KEYWORDS.includes(firstWordUpper) && !/^\w+\s*=/.test(trimmed)) {
+            errors.push({
+                line: lineNum,
+                message: `Unrecognized statement: "${trimmed}".`,
+                suggestion: 'Use valid pseudocode keywords: SET, DISPLAY, IF, FOR, WHILE, CALL, RETURN, etc.'
+            });
+        }
+    }
+
+    // --- PHASE 3: Check unbalanced quotes ---
+    for (let i = 0; i < lines.length; i++) {
+        const lineNum = i + 1;
+        const trimmed = lines[i].trim();
+        if (!trimmed || trimmed.startsWith('//') || trimmed.startsWith('#')) continue;
+        if (lineNum < beginLineNum || lineNum > endLineNum) continue;
+        if (/^BEGIN$/i.test(trimmed) || /^END$/i.test(trimmed)) continue;
+
+        const doubleQuotes = (trimmed.match(/"/g) || []).length;
+        const singleQuotes = (trimmed.match(/'/g) || []).length;
+        if (doubleQuotes % 2 !== 0) errors.push({ line: lineNum, message: 'Unbalanced double quotes — missing closing ".', suggestion: 'Make sure every opening " has a matching closing ".' });
+        if (singleQuotes % 2 !== 0) errors.push({ line: lineNum, message: "Unbalanced single quotes — missing closing '.", suggestion: "Make sure every opening ' has a matching closing '." });
+    }
+
+    // --- PHASE 4: Unclosed blocks ---
+    while (blockStack.length > 0) {
+        const unclosed = blockStack.pop();
+        errors.push({ line: unclosed.line, message: `Unclosed ${unclosed.type} block (opened on line ${unclosed.line}).`, suggestion: `Add END ${unclosed.type} to close this block.` });
+    }
+
+    errors.sort((a, b) => a.line - b.line);
+    return { valid: errors.length === 0, errors };
+}
+
+/**
+ * Check for incomplete expressions (trailing operators, empty operands).
+ * Detects things like: "Hello" +   or   x *   or   y /
+ */
+function checkIncompleteExpression(expr, lineNum, errors) {
+    const trimmed = expr.trim();
+    if (/[+\-*\/]\s*$/.test(trimmed)) {
+        const op = trimmed.match(/([+\-*\/])\s*$/)[1];
+        errors.push({ line: lineNum, message: `Incomplete expression — missing value after '${op}' operator.`, suggestion: `Add a value or variable after '${op}'. Example: "Hello, " + name` });
+    }
+    if (/^[+*\/]/.test(trimmed)) {
+        errors.push({ line: lineNum, message: `Incomplete expression — unexpected '${trimmed[0]}' at the start.`, suggestion: `Add a value before '${trimmed[0]}'.` });
+    }
+    if (/[+\-*\/]\s*[+*\/]/.test(trimmed)) {
+        errors.push({ line: lineNum, message: 'Invalid expression — consecutive operators found.', suggestion: 'Check for extra operators and ensure proper syntax.' });
+    }
+}
+
+/**
+ * Format validation errors as Python comments for the output panel.
+ */
+function formatValidationErrors(errors) {
+    let output = '# ❌ Syntax Errors Found:\n#\n';
+    for (const err of errors) {
+        output += `# Line ${err.line}: ${err.message}\n`;
+        if (err.suggestion) {
+            output += `#   💡 Suggestion: ${err.suggestion}\n`;
+        }
+        output += '#\n';
+    }
+    output += '# Fix the pseudocode before translation.\n';
+    return output;
+}
+
+/**
+ * Highlight error lines in the editor with a visual indicator.
+ * Uses an overlay div to show error markers.
+ */
+function highlightEditorErrors(editorId, errors) {
+    clearEditorErrors(editorId);
+    const editor = document.getElementById(editorId);
+    if (!editor) return;
+
+    // Add error class to the editor
+    editor.classList.add('has-errors');
+
+    // Create an error indicator panel below the editor
+    const panel = editor.closest('.editor-panel');
+    if (!panel) return;
+
+    let errorPanel = panel.querySelector('.validation-error-panel');
+    if (!errorPanel) {
+        errorPanel = document.createElement('div');
+        errorPanel.className = 'validation-error-panel';
+        panel.querySelector('.panel-body').appendChild(errorPanel);
+    }
+
+    errorPanel.innerHTML = errors.slice(0, 5).map(err =>
+        `<div class="validation-error-item">
+            <span class="error-line-num">Line ${err.line}</span>
+            <span class="error-msg">${err.message}</span>
+            ${err.suggestion ? `<span class="error-suggestion">💡 ${err.suggestion}</span>` : ''}
+        </div>`
+    ).join('') + (errors.length > 5 ? `<div class="validation-error-item"><span class="error-msg">...and ${errors.length - 5} more error(s)</span></div>` : '');
+}
+
+/**
+ * Clear error highlighting from the editor.
+ */
+function clearEditorErrors(editorId) {
+    const editor = document.getElementById(editorId);
+    if (!editor) return;
+    editor.classList.remove('has-errors');
+
+    const panel = editor.closest('.editor-panel');
+    if (panel) {
+        const errorPanel = panel.querySelector('.validation-error-panel');
+        if (errorPanel) errorPanel.remove();
+    }
+}
+
+
+/* ============================================================
+   EDITOR UTILITY FUNCTIONS
+   New File, Save
+   ============================================================ */
+
+/**
+ * New File — clears editor and inserts default template
+ */
+function newFile() {
+    const editor = document.getElementById('pseudocode-editor');
+    editor.value = 'BEGIN\n    // Write your pseudocode here\nEND';
+    document.getElementById('python-output').value = '';
+    document.getElementById('console-output').textContent = 'New file created. Start writing your pseudocode.';
+    document.getElementById('console-output').className = 'output-content';
+    document.getElementById('line-count').textContent = '3 lines';
+    clearEditorErrors('pseudocode-editor');
+
+    const runBtn = document.querySelector('#page-write-pseudocode .btn-success');
+    if (runBtn) runBtn.disabled = false;
+
+    showToast('New file created with template.', 'info');
+}
+
+/**
+ * Save pseudocode as a .txt file
+ */
+function savePseudocodeAsFile() {
+    const code = document.getElementById('pseudocode-editor').value;
+    if (!code.trim()) { showToast('Nothing to save. Write some pseudocode first.', 'error'); return; }
+    const blob = new Blob([code], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'pseudocode.txt';
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('Pseudocode saved as file!', 'success');
+}
+
+
+
+
+/* ============================================================
+   REAL-TIME VALIDATION (Bonus)
+   Debounced validation while typing
+   ============================================================ */
+
+let validationTimer = null;
+
+function setupRealtimeValidation() {
+    const editor = document.getElementById('pseudocode-editor');
+    if (!editor) return;
+
+    // Real-time validation runs silently — errors only shown on Translate
+    editor.addEventListener('input', () => {
+        clearTimeout(validationTimer);
+        validationTimer = setTimeout(() => {
+            const code = editor.value.trim();
+            if (!code) return;
+            // Silent validation — no visual indicators in the editor
+            // Errors are only shown in Python Output when user clicks Translate
+        }, 1000);
+    });
+}
+
 
 // ── Init on Load ──
 if (document.readyState === 'loading') {
