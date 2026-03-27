@@ -413,6 +413,25 @@ function pseudocodeToPython(pseudocode) {
             continue;
         }
 
+        if (/^(DISPLAY|PRINT|OUTPUT)\s*\(\s*\(\s*new\s*line\s*\)\s*\)$/i.test(line) || /^(DISPLAY|PRINT|OUTPUT)\s*\(\s*new\s*line\s*\)$/i.test(line)) {
+            pythonLines.push(indent(indentLevel) + `print()`);
+            continue;
+        }
+
+        const continueRegex = /^(DISPLAY|PRINT|OUTPUT)\s*\((.*?)\s*\(\s*continue\s*on\s*same\s*line\s*\)\)$/i;
+        const continueRegex2 = /^(DISPLAY|PRINT|OUTPUT)\s+(.*?)\s*\(\s*continue\s*on\s*same\s*line\s*\)$/i;
+        if (continueRegex.test(line) || continueRegex2.test(line)) {
+            const match = line.match(continueRegex) || line.match(continueRegex2);
+            pythonLines.push(indent(indentLevel) + `print(${translateExpr(match[2])}, end="")`);
+            continue;
+        }
+
+        if (/^(DISPLAY|PRINT|OUTPUT)\s*\((.+)\)$/i.test(line)) {
+            const match = line.match(/^(DISPLAY|PRINT|OUTPUT)\s*\((.+)\)$/i);
+            pythonLines.push(indent(indentLevel) + `print(${translateExpr(match[2])})`);
+            continue;
+        }
+
         if (/^(DISPLAY|PRINT|OUTPUT)\s+(.+)$/i.test(line)) {
             const match = line.match(/^(DISPLAY|PRINT|OUTPUT)\s+(.+)$/i);
             pythonLines.push(indent(indentLevel) + `print(${translateExpr(match[2])})`);
@@ -448,6 +467,21 @@ function pseudocodeToPython(pseudocode) {
             continue;
         }
 
+        if (/^DECLARE\s+(\w+)\s+AS\s+(INTEGER|NUMERIC|FLOAT|REAL|STRING|CHAR|CHARACTER|BOOLEAN|BOOL|ARRAY)/i.test(line)) {
+            const match = line.match(/^DECLARE\s+(\w+)\s+AS\s+(INTEGER|NUMERIC|FLOAT|REAL|STRING|CHAR|CHARACTER|BOOLEAN|BOOL|ARRAY)/i);
+            const varName = match[1];
+            const type = match[2].toUpperCase();
+            const typeDefaults = {
+                'NUMERIC': '0', 'INTEGER': '0', 'FLOAT': '0.0', 'REAL': '0.0',
+                'STRING': '""', 'CHAR': '""', 'CHARACTER': '""',
+                'BOOLEAN': 'False', 'BOOL': 'False', 'ARRAY': '[]'
+            };
+            const defaultVal = typeDefaults[type] || 'None';
+            pythonLines.push(indent(indentLevel) + `# DECLARE ${varName} AS ${type}`);
+            pythonLines.push(indent(indentLevel) + `${varName} = ${defaultVal}`);
+            continue;
+        }
+
         // Handle variable type declarations: NUMERIC, STRING, BOOLEAN, etc.
         if (/^(NUMERIC|INTEGER|FLOAT|REAL|STRING|CHAR|CHARACTER|BOOLEAN|BOOL)\s+(\w+)/i.test(line)) {
             const match = line.match(/^(NUMERIC|INTEGER|FLOAT|REAL|STRING|CHAR|CHARACTER|BOOLEAN|BOOL)\s+(\w+)/i);
@@ -463,8 +497,8 @@ function pseudocodeToPython(pseudocode) {
         }
 
         // Handle direct assignment: variable = expression
-        if (/^(\w+)\s*=\s*(.+)$/i.test(line)) {
-            const match = line.match(/^(\w+)\s*=\s*(.+)$/);
+        if (/^([a-zA-Z0-9_]+(?:\[.+?\])?)\s*=\s*(.+)$/i.test(line)) {
+            const match = line.match(/^([a-zA-Z0-9_]+(?:\[.+?\])?)\s*=\s*(.+)$/);
             pythonLines.push(indent(indentLevel) + `${match[1]} = ${translateExpr(match[2])}`);
             continue;
         }
