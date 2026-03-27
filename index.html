@@ -250,39 +250,27 @@
             </div>
             <div class="panel-body">
               <textarea id="pseudocode-editor" class="code-editor" spellcheck="false"
-                placeholder="Write your pseudocode here...&#10;&#10;Example:&#10;BEGIN&#10;  SET x TO 10&#10;  IF x > 5 THEN&#10;    DISPLAY &quot;x is large&quot;&#10;  ELSE&#10;    DISPLAY &quot;x is small&quot;&#10;  END IF&#10;END">BEGIN
-  SET name TO "World"
-  DISPLAY "Hello, " + name
-
-  SET numbers TO [1, 2, 3, 4, 5]
-  SET total TO 0
-
-  FOR EACH num IN numbers DO
-    SET total TO total + num
-  END FOR
-
-  DISPLAY "Sum = " + total
-
-  IF total > 10 THEN
-    DISPLAY "Total is greater than 10"
-  ELSE
-    DISPLAY "Total is 10 or less"
-  END IF
-END</textarea>
+                placeholder="Write your pseudocode here...&#10;&#10;Example:&#10;BEGIN&#10;  SET x TO 10&#10;  IF x > 5 THEN&#10;    DISPLAY &quot;x is large&quot;&#10;  ELSE&#10;    DISPLAY &quot;x is small&quot;&#10;  END IF&#10;END"></textarea>
             </div>
             <div class="panel-footer">
               <button class="btn btn-primary" style="width:auto" onclick="translatePseudocode()">
                 🔄 Translate to Python
               </button>
-              <button class="btn btn-secondary btn-sm" onclick="clearEditor()">
-                🗑️ Clear
+              <button class="btn btn-secondary btn-sm" onclick="newFile()">
+                📄 New File
               </button>
+
               <button class="btn btn-secondary btn-sm" onclick="uploadPseudocode()">
                 📂 Upload
               </button>
+              <button class="btn btn-secondary btn-sm" onclick="savePseudocodeAsFile()">
+                💾 Save as File
+              </button>
+
               <input type="file" id="pseudocode-file-input" accept=".txt,.pseudo,.ps,.text" style="display:none"
                 onchange="handlePseudocodeUpload(event)">
-              <span style="margin-left:auto;font-size:0.75rem;color:var(--text-muted)" id="line-count">15 lines</span>
+              <span style="margin-left:auto;font-size:0.75rem;color:var(--text-muted);white-space:nowrap"
+                id="line-count">15 lines</span>
             </div>
           </div>
 
@@ -384,12 +372,7 @@ END</textarea>
           </div>
           <div class="panel-body">
             <textarea id="execute-editor" class="code-editor" spellcheck="false"
-              placeholder="Write or paste Python code here to execute...">print("Hello from PseudoPy!")
-
-for i in range(1, 6):
-    print(f"Step {i}: Processing...")
-
-print("Done!")</textarea>
+              placeholder="Write or paste Python code here to execute..."></textarea>
           </div>
           <div class="panel-footer">
             <button class="btn btn-success" style="width:auto" onclick="executeFromExecPage()">

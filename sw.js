@@ -3,7 +3,7 @@
    Offline-first caching strategy
    ============================================================ */
 
-const CACHE_NAME = 'pseudopy-v9';
+const CACHE_NAME = 'pseudopy-v10';
 const ASSETS_TO_CACHE = [
     '/',
     '/index.html',
