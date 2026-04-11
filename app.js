@@ -328,9 +328,8 @@ function instructorTranslate() {
     showToast('Python code generated!', 'success');
 }
 
-<<<<<<< HEAD
 const compilerEngine = new PseudocodeCompiler();
-=======
+
 
 /* ============================================================
    FILE UPLOAD (TEXT AND PDF)
@@ -390,25 +389,17 @@ async function handleFileUpload(event, targetEditorId) {
     event.target.value = '';
 }
 
->>>>>>> a1194aa60e997290d47490f19ba16c70925b7188
+
 /**
  * Compiler Facade: Translation Engine
  * Converts structured pseudocode into valid Python via AST code generation.
  */
 function pseudocodeToPython(pseudocode) {
-<<<<<<< HEAD
     const result = compilerEngine.compile(pseudocode);
     return result.python;
-=======
-    const lines = pseudocode.split('\n');
-    const pythonLines = [];
-    let indentLevel = 0;
-    const numericVars = new Set(); // Track variables declared as NUMERIC/INTEGER/FLOAT
+}
 
-    for (let i = 0; i < lines.length; i++) {
-        let line = lines[i].trim();
 
-        if (!line) { pythonLines.push(''); continue; }
         if (/^BEGIN$/i.test(line)) continue;
         if (/^END$/i.test(line)) continue;
 
@@ -700,7 +691,15 @@ function runPythonCode(code, outputElementId) {
                         echo.innerHTML = '<span class="skulpt-echo-prompt">▸ Input:</span> <span class="skulpt-echo-value">' + escapeHtml(value) + '</span>';
                     }
                     container.replaceWith(echo);
-                    resolve(value);
+                    
+                    // Automatic type-check for mathematical operations
+                    const trimmed = value.trim();
+                    if (trimmed !== "" && !isNaN(trimmed)) {
+                        resolve(parseFloat(trimmed));
+                    } else {
+                        resolve(value);
+                    }
+
                 }
 
                 submitBtn.addEventListener('click', submitInput);
@@ -1935,8 +1934,7 @@ function togglePasswordVisibility(inputId, btn) {
 }
 window.togglePasswordVisibility = togglePasswordVisibility;
 
-<<<<<<< HEAD
-=======
+
 /* ============================================================
    PASSWORD MANAGEMENT
    ============================================================ */
@@ -2005,4 +2003,4 @@ function toggleUserPasswordVisibility(userId) {
         }
     }
 }
->>>>>>> a1194aa60e997290d47490f19ba16c70925b7188
+

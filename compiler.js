@@ -919,9 +919,10 @@ class CodeGenerator {
                 if (node.prompt && node.prompt.length > 0) {
                     this.lines.push(this.ind() + node.id + ' = input(' + node.prompt[0].value + ')');
                 } else {
-                    this.lines.push(this.ind() + node.id + ' = input()');
+                    this.lines.push(this.ind() + node.id + ' = input("Please enter a value: ")');
                 }
                 break;
+
 
             case 'IfStatement':
                 // indent_level increases after THEN

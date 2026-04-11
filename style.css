@@ -969,7 +969,7 @@ h4 {
   color: var(--error);
 }
 
-<<<<<<< HEAD
+
 /* ── Validation Error Panel ── */
 .validation-error-panel {
   max-height: 140px;
@@ -1062,8 +1062,8 @@ h4 {
   cursor: not-allowed;
   transform: none !important;
   box-shadow: none !important;
-=======
-/* ── Skulpt Inline Input UI ── */
+}
+
 .skulpt-input-container {
   margin: 0.75rem 0 0.5rem;
   padding: 0.75rem 1rem;
@@ -1149,7 +1149,6 @@ h4 {
 .skulpt-echo-value {
   color: #22d3ee;
   font-weight: 600;
->>>>>>> a1194aa60e997290d47490f19ba16c70925b7188
 }
 
 /* ── Feedback Panel ── */
