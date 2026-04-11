@@ -3,13 +3,15 @@
    Offline-first caching strategy
    ============================================================ */
 
-const CACHE_NAME = 'pseudopy-v10';
+const CACHE_NAME = 'pseudopy-v11';
 const ASSETS_TO_CACHE = [
     '/',
     '/index.html',
     '/style.css',
     '/app.js',
+    '/compiler.js',
     '/manifest.json',
+
     'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap',
     'https://skulpt.org/js/skulpt.min.js',
     'https://skulpt.org/js/skulpt-stdlib.js'

@@ -720,9 +720,10 @@ class Parser {
 // ══════════════════════════════════════════════════════════════
 class SemanticAnalyzer {
     constructor() {
-        this.symbolTable = new Set();
+        this.symbolTable = new Map(); // id -> { type: 'numeric' | 'string' | 'unknown' }
         this.warnings = [];
     }
+
 
     analyze(ast) {
         this.visitNode(ast);
@@ -735,9 +736,12 @@ class SemanticAnalyzer {
             case 'Program':
                 node.body.forEach(n => this.visitNode(n));
                 break;
-            case 'DeclareStatement':
-                this.symbolTable.add(node.id);
+            case 'DeclareStatement': {
+                const isNumeric = ['INTEGER', 'FLOAT', 'NUMERIC', 'REAL', 'NUMBER'].includes(node.varType.toUpperCase());
+                this.symbolTable.set(node.id, { type: isNumeric ? 'numeric' : 'unknown' });
                 break;
+            }
+
             case 'AssignmentStatement':
                 if (!this.symbolTable.has(node.id)) {
                     this.warnings.push({
@@ -746,21 +750,26 @@ class SemanticAnalyzer {
                         suggestion: 'Add: DECLARE ' + node.id + ' AS INTEGER (or appropriate type)'
                     });
                 }
-                this.symbolTable.add(node.id); // implicit declaration on assignment
+                // SET x TO 5 -> if 5 is a number, x becomes numeric. Simplification:
+                this.symbolTable.set(node.id, { type: 'numeric' });
                 this.checkExpr(node.expr);
                 break;
+
             case 'ArrayAssignStatement':
                 if (!this.symbolTable.has(node.id)) {
                     this.warnings.push({ line: node.line, message: "Array '" + node.id + "' not declared.", suggestion: 'Add: DECLARE ' + node.id + ' AS ARRAY' });
                 }
-                this.symbolTable.add(node.id);
+                this.symbolTable.set(node.id, { type: 'unknown' });
                 break;
+
             case 'PrintStatement':
                 this.checkExpr(node.expr);
                 break;
             case 'InputStatement':
-                this.symbolTable.add(node.id); // INPUT implicitly declares the variable
+                // The Code Generator wraps INPUT in float(), so we treat it as numeric
+                this.symbolTable.set(node.id, { type: 'numeric' });
                 break;
+
             case 'IfStatement':
                 this.checkExpr(node.condition);
                 node.body.forEach(n => this.visitNode(n));
@@ -800,16 +809,35 @@ class SemanticAnalyzer {
 
     checkExpr(exprNode) {
         if (!exprNode || !exprNode.tokens) return;
+        
+        const MATH_OPS = ['+', '-', '*', '/', 'MOD', '^'];
+        let hasMath = false;
+        
         for (const t of exprNode.tokens) {
-            if (t.type === TOKEN_TYPES.IDENTIFIER && !this.symbolTable.has(t.value)) {
-                this.warnings.push({
-                    line: exprNode.line,
-                    message: "Undeclared variable '" + t.value + "' in expression.",
-                    suggestion: 'Declare it with DECLARE ' + t.value + ' AS INTEGER'
-                });
+            // Check mathematical operation detection
+            if (t.type === TOKEN_TYPES.OPERATOR && MATH_OPS.includes(t.value)) hasMath = true;
+            if (t.type === TOKEN_TYPES.KEYWORD && t.value.toUpperCase() === 'MOD') hasMath = true;
+
+            if (t.type === TOKEN_TYPES.IDENTIFIER) {
+                const info = this.symbolTable.get(t.value);
+                if (!info) {
+                    this.warnings.push({
+                        line: exprNode.line,
+                        message: "Undeclared variable '" + t.value + "' in expression.",
+                        suggestion: 'Declare it with DECLARE ' + t.value + ' AS INTEGER'
+                    });
+                } else if (hasMath && info.type !== 'numeric') {
+                    // Symbol Table Verification: Verify marker as numeric type for math ops
+                    this.warnings.push({
+                        line: exprNode.line,
+                        message: "Mathematical operation used on non-numeric variable '" + t.value + "'.",
+                        suggestion: 'Ensure ' + t.value + ' is declared as a NUMBER or initialized with a value.'
+                    });
+                }
             }
         }
     }
+
 }
 
 
@@ -911,25 +939,30 @@ class CodeGenerator {
 
             case 'PrintStatement': {
                 const s = this.exprToStr(node.expr.tokens);
-                this.lines.push(this.ind() + 'print(' + s + ')');
+                // Formatting Alignment: Ensure PRINT uses str() conversion for numeric safety
+                this.lines.push(this.ind() + 'print(str(' + s + '))');
                 break;
             }
 
+
             case 'InputStatement':
+                // Strict Numeric Translation: Wrap input in float()
                 if (node.prompt && node.prompt.length > 0) {
-                    this.lines.push(this.ind() + node.id + ' = input(' + node.prompt[0].value + ')');
+                    this.lines.push(this.ind() + node.id + ' = float(input(' + node.prompt[0].value + '))');
                 } else {
-                    this.lines.push(this.ind() + node.id + ' = input("Please enter a value: ")');
+                    this.lines.push(this.ind() + node.id + ' = float(input("Please enter a value: "))');
                 }
                 break;
+
 
 
             case 'IfStatement':
                 // indent_level increases after THEN
                 this.lines.push(this.ind() + 'if ' + this.exprToStr(node.condition.tokens) + ':');
                 this.indentLevel++;
-                if (node.body.length === 0) this.lines.push(this.ind() + 'pass');
+                if (this.isBodyEffectivelyEmpty(node.body)) this.lines.push(this.ind() + 'pass');
                 else node.body.forEach(n => this.visitNode(n));
+
                 this.indentLevel--;  // indent_level decreases after END IF
                 if (node.elseBody) {
                     this.lines.push(this.ind() + 'else:');
@@ -944,24 +977,27 @@ class CodeGenerator {
                 // indent_level increases after DO
                 this.lines.push(this.ind() + 'while ' + this.exprToStr(node.condition.tokens) + ':');
                 this.indentLevel++;
-                if (node.body.length === 0) this.lines.push(this.ind() + 'pass');
+                if (this.isBodyEffectivelyEmpty(node.body)) this.lines.push(this.ind() + 'pass');
                 else node.body.forEach(n => this.visitNode(n));
+
                 this.indentLevel--;  // indent_level decreases after END WHILE
                 break;
 
             case 'ForStatement':
                 this.lines.push(this.ind() + 'for ' + node.iterator + ' in range(' + this.exprToStr(node.startExpr.tokens) + ', ' + this.exprToStr(node.endExpr.tokens) + ' + 1):');
                 this.indentLevel++;
-                if (node.body.length === 0) this.lines.push(this.ind() + 'pass');
+                if (this.isBodyEffectivelyEmpty(node.body)) this.lines.push(this.ind() + 'pass');
                 else node.body.forEach(n => this.visitNode(n));
+
                 this.indentLevel--;
                 break;
 
             case 'ForEachStatement':
                 this.lines.push(this.ind() + 'for ' + node.iterator + ' in ' + this.exprToStr(node.iterable.tokens) + ':');
                 this.indentLevel++;
-                if (node.body.length === 0) this.lines.push(this.ind() + 'pass');
+                if (this.isBodyEffectivelyEmpty(node.body)) this.lines.push(this.ind() + 'pass');
                 else node.body.forEach(n => this.visitNode(n));
+
                 this.indentLevel--;
                 break;
 
@@ -984,13 +1020,21 @@ class CodeGenerator {
             case 'FunctionDef':
                 this.lines.push(this.ind() + 'def ' + node.name + '(' + this.exprToStr(node.params.tokens) + '):');
                 this.indentLevel++;
-                if (node.body.length === 0) this.lines.push(this.ind() + 'pass');
+                if (this.isBodyEffectivelyEmpty(node.body)) this.lines.push(this.ind() + 'pass');
                 else node.body.forEach(n => this.visitNode(n));
+
                 this.indentLevel--;
                 break;
         }
     }
+
+    isBodyEffectivelyEmpty(body) {
+        if (!body || body.length === 0) return true;
+        // Does it contain anything other than Comments?
+        return !body.some(node => node.type !== 'Comment');
+    }
 }
+
 
 
 // ══════════════════════════════════════════════════════════════
@@ -1000,7 +1044,7 @@ class CodeGenerator {
 // Caches successful translations for iterative refinement.
 // Separates syntax errors (hard stops) from semantic warnings.
 // ══════════════════════════════════════════════════════════════
-const TranslationCache = {};
+
 
 class PseudocodeCompiler {
     /**
@@ -1013,11 +1057,6 @@ class PseudocodeCompiler {
      *   4. CodeGenerator.generate()  — SDT tree-walk → Python emission
      */
     compile(code) {
-        // ── Check cache first ──
-        const normalized = code.trim().replace(/\r\n/g, '\n');
-        if (TranslationCache[normalized]) {
-            return { valid: true, python: TranslationCache[normalized], errors: [], warnings: [] };
-        }
 
         // ── Stage 1: Lexical Analysis ──
         const lexer = new Lexer(code);
@@ -1040,8 +1079,6 @@ class PseudocodeCompiler {
         const generator = new CodeGenerator();
         const pythonCode = generator.generate(ast);
 
-        // ── Cache successful translation for iterative refinement ──
-        TranslationCache[normalized] = pythonCode;
 
         return { valid: true, python: pythonCode, errors: [], warnings: warnings };
     }
