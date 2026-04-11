@@ -11,6 +11,7 @@ let currentUser = null;
 let currentPage = '';
 let editingExerciseId = null;
 let editingUserId = null;
+let currentErrorLineNumber = null;
 
 // ── Cached data (loaded from Firestore) ──
 let cachedUsers = [];
@@ -52,12 +53,21 @@ async function init() {
     updateClock();
     setInterval(updateClock, 60000);
 
-    // Update line count on editor input
+    // Update line count on editor input and sync gutter
     const editor = document.getElementById('pseudocode-editor');
     if (editor) {
         editor.addEventListener('input', () => {
             const lines = editor.value.split('\n').length;
             document.getElementById('line-count').textContent = lines + ' lines';
+            updateGutter();
+        });
+        
+        // Sync scrolling for gutter
+        editor.addEventListener('scroll', () => {
+            const gutter = document.getElementById('editor-gutter');
+            if (gutter) {
+                gutter.scrollTop = editor.scrollTop;
+            }
         });
     }
 
@@ -259,20 +269,24 @@ function translatePseudocode() {
     const runBtn = document.querySelector('#page-write-pseudocode .btn-success');
 
     if (!validation.valid) {
-        // Output errors as Python comments — only in the Python Output panel
-        const errorOutput = formatValidationErrors(validation.errors);
-        document.getElementById('python-output').value = errorOutput;
+        // Output formatted HTML errors into the element
+        const errorOutput = renderHtmlErrors(validation.errors);
+        document.getElementById('python-output').innerHTML = errorOutput;
 
-        output.className = 'output-content error';
-        output.textContent = `❌ ${validation.errors.length} syntax error(s) found. Fix them before translating.`;
+        currentErrorLineNumber = validation.errors[0].line;
+        output.className = 'output-content';
+        output.innerHTML = renderHtmlErrors(validation.errors);
 
         if (runBtn) runBtn.disabled = true;
-        showToast(`${validation.errors.length} syntax error(s) found. Check the Python Output panel.`, 'error');
+        showToast(`${validation.errors.length} syntax error(s) found. Check the console output.`, 'error');
+        updateGutter();
         return;
     }
 
+    currentErrorLineNumber = null;
+    updateGutter();
     const python = pseudocodeToPython(input);
-    document.getElementById('python-output').value = python;
+    document.getElementById('python-output').textContent = python;
 
     output.className = 'output-content';
     output.textContent = '✅ Pseudocode translated successfully! Click "Run Code" to execute.';
@@ -290,13 +304,13 @@ function translateFromPage() {
 
     const validation = validatePseudocode(input);
     if (!validation.valid) {
-        document.getElementById('translate-output').value = formatValidationErrors(validation.errors);
+        document.getElementById('translate-output').innerHTML = renderHtmlErrors(validation.errors);
         showToast(`${validation.errors.length} syntax error(s) found.`, 'error');
         return;
     }
 
     const python = pseudocodeToPython(input);
-    document.getElementById('translate-output').value = python;
+    document.getElementById('translate-output').textContent = python;
     showToast('Translation complete!', 'success');
 }
 
@@ -309,224 +323,24 @@ function instructorTranslate() {
 
     const validation = validatePseudocode(input);
     if (!validation.valid) {
-        document.getElementById('instructor-python-output').value = formatValidationErrors(validation.errors);
+        document.getElementById('instructor-python-output').innerHTML = renderHtmlErrors(validation.errors);
         showToast(`${validation.errors.length} syntax error(s) found.`, 'error');
         return;
     }
 
     const python = pseudocodeToPython(input);
-    document.getElementById('instructor-python-output').value = python;
+    document.getElementById('instructor-python-output').textContent = python;
     showToast('Python code generated!', 'success');
 }
 
+const compilerEngine = new PseudocodeCompiler();
 /**
- * Core Translation Engine
- * Converts structured pseudocode into valid Python.
+ * Compiler Facade: Translation Engine
+ * Converts structured pseudocode into valid Python via AST code generation.
  */
 function pseudocodeToPython(pseudocode) {
-    const lines = pseudocode.split('\n');
-    const pythonLines = [];
-    let indentLevel = 0;
-
-    for (let i = 0; i < lines.length; i++) {
-        let line = lines[i].trim();
-
-        if (!line) { pythonLines.push(''); continue; }
-        if (/^BEGIN$/i.test(line)) continue;
-        if (/^END$/i.test(line)) continue;
-
-        if (line.startsWith('//') || line.startsWith('#')) {
-            pythonLines.push(indent(indentLevel) + '# ' + line.replace(/^\/\/\s*|^#\s*/, ''));
-            continue;
-        }
-
-        if (/^END\s+(IF|FOR|WHILE|FUNCTION|PROCEDURE)/i.test(line)) {
-            indentLevel = Math.max(0, indentLevel - 1);
-            continue;
-        }
-
-        if (/^ELSE\s+IF\s+(.+)\s+THEN$/i.test(line)) {
-            indentLevel = Math.max(0, indentLevel - 1);
-            const match = line.match(/^ELSE\s+IF\s+(.+)\s+THEN$/i);
-            pythonLines.push(indent(indentLevel) + `elif ${translateCondition(match[1])}:`);
-            indentLevel++;
-            continue;
-        }
-
-        if (/^ELSE$/i.test(line)) {
-            indentLevel = Math.max(0, indentLevel - 1);
-            pythonLines.push(indent(indentLevel) + 'else:');
-            indentLevel++;
-            continue;
-        }
-
-        if (/^IF\s+(.+)\s+THEN$/i.test(line)) {
-            const match = line.match(/^IF\s+(.+)\s+THEN$/i);
-            pythonLines.push(indent(indentLevel) + `if ${translateCondition(match[1])}:`);
-            indentLevel++;
-            continue;
-        }
-
-        if (/^FOR\s+EACH\s+(\w+)\s+IN\s+(.+)\s+DO$/i.test(line)) {
-            const match = line.match(/^FOR\s+EACH\s+(\w+)\s+IN\s+(.+)\s+DO$/i);
-            pythonLines.push(indent(indentLevel) + `for ${match[1]} in ${translateExpr(match[2])}:`);
-            indentLevel++;
-            continue;
-        }
-
-        if (/^FOR\s+(\w+)\s+FROM\s+(.+)\s+TO\s+(.+)\s+DO$/i.test(line)) {
-            const match = line.match(/^FOR\s+(\w+)\s+FROM\s+(.+)\s+TO\s+(.+)\s+DO$/i);
-            pythonLines.push(indent(indentLevel) + `for ${match[1]} in range(${translateExpr(match[2])}, ${translateExpr(match[3])} + 1):`);
-            indentLevel++;
-            continue;
-        }
-
-        if (/^WHILE\s+(.+)\s+DO$/i.test(line)) {
-            const match = line.match(/^WHILE\s+(.+)\s+DO$/i);
-            pythonLines.push(indent(indentLevel) + `while ${translateCondition(match[1])}:`);
-            indentLevel++;
-            continue;
-        }
-
-        if (/^(FUNCTION|PROCEDURE)\s+(\w+)\s*\((.*)?\)$/i.test(line)) {
-            const match = line.match(/^(FUNCTION|PROCEDURE)\s+(\w+)\s*\((.*)?\)$/i);
-            pythonLines.push(indent(indentLevel) + `def ${match[2]}(${match[3] ? match[3].trim() : ''}):`);
-            indentLevel++;
-            continue;
-        }
-
-        if (/^RETURN\s+(.+)$/i.test(line)) {
-            const match = line.match(/^RETURN\s+(.+)$/i);
-            pythonLines.push(indent(indentLevel) + `return ${translateExpr(match[1])}`);
-            continue;
-        }
-
-        if (/^CALL\s+(\w+)\s*\((.*)?\)$/i.test(line)) {
-            const match = line.match(/^CALL\s+(\w+)\s*\((.*)?\)$/i);
-            pythonLines.push(indent(indentLevel) + `${match[1]}(${match[2] ? translateExpr(match[2]) : ''})`);
-            continue;
-        }
-
-        if (/^SET\s+(\w+)\s+TO\s+(.+)$/i.test(line)) {
-            const match = line.match(/^SET\s+(\w+)\s+TO\s+(.+)$/i);
-            pythonLines.push(indent(indentLevel) + `${match[1]} = ${translateExpr(match[2])}`);
-            continue;
-        }
-
-        if (/^(DISPLAY|PRINT|OUTPUT)\s*\(\s*\(\s*new\s*line\s*\)\s*\)$/i.test(line) || /^(DISPLAY|PRINT|OUTPUT)\s*\(\s*new\s*line\s*\)$/i.test(line)) {
-            pythonLines.push(indent(indentLevel) + `print()`);
-            continue;
-        }
-
-        const continueRegex = /^(DISPLAY|PRINT|OUTPUT)\s*\((.*?)\s*\(\s*continue\s*on\s*same\s*line\s*\)\)$/i;
-        const continueRegex2 = /^(DISPLAY|PRINT|OUTPUT)\s+(.*?)\s*\(\s*continue\s*on\s*same\s*line\s*\)$/i;
-        if (continueRegex.test(line) || continueRegex2.test(line)) {
-            const match = line.match(continueRegex) || line.match(continueRegex2);
-            pythonLines.push(indent(indentLevel) + `print(${translateExpr(match[2])}, end="")`);
-            continue;
-        }
-
-        if (/^(DISPLAY|PRINT|OUTPUT)\s*\((.+)\)$/i.test(line)) {
-            const match = line.match(/^(DISPLAY|PRINT|OUTPUT)\s*\((.+)\)$/i);
-            pythonLines.push(indent(indentLevel) + `print(${translateExpr(match[2])})`);
-            continue;
-        }
-
-        if (/^(DISPLAY|PRINT|OUTPUT)\s+(.+)$/i.test(line)) {
-            const match = line.match(/^(DISPLAY|PRINT|OUTPUT)\s+(.+)$/i);
-            pythonLines.push(indent(indentLevel) + `print(${translateExpr(match[2])})`);
-            continue;
-        }
-
-        if (/^(INPUT|READ)\s+(\w+)$/i.test(line)) {
-            const match = line.match(/^(INPUT|READ)\s+(\w+)$/i);
-            pythonLines.push(indent(indentLevel) + `${match[2]} = input()`);
-            continue;
-        }
-
-        if (/^(INPUT|READ)\s+(\w+)\s+WITH\s+PROMPT\s+"(.+)"$/i.test(line)) {
-            const match = line.match(/^(INPUT|READ)\s+(\w+)\s+WITH\s+PROMPT\s+"(.+)"$/i);
-            pythonLines.push(indent(indentLevel) + `${match[2]} = input("${match[3]}")`);
-            continue;
-        }
-
-        if (/^INCREMENT\s+(\w+)$/i.test(line)) {
-            const match = line.match(/^INCREMENT\s+(\w+)$/i);
-            pythonLines.push(indent(indentLevel) + `${match[1]} += 1`);
-            continue;
-        }
-        if (/^DECREMENT\s+(\w+)$/i.test(line)) {
-            const match = line.match(/^DECREMENT\s+(\w+)$/i);
-            pythonLines.push(indent(indentLevel) + `${match[1]} -= 1`);
-            continue;
-        }
-
-        if (/^APPEND\s+(.+)\s+TO\s+(\w+)$/i.test(line)) {
-            const match = line.match(/^APPEND\s+(.+)\s+TO\s+(\w+)$/i);
-            pythonLines.push(indent(indentLevel) + `${match[2]}.append(${translateExpr(match[1])})`);
-            continue;
-        }
-
-        if (/^DECLARE\s+(\w+)\s+AS\s+(INTEGER|NUMERIC|FLOAT|REAL|STRING|CHAR|CHARACTER|BOOLEAN|BOOL|ARRAY)/i.test(line)) {
-            const match = line.match(/^DECLARE\s+(\w+)\s+AS\s+(INTEGER|NUMERIC|FLOAT|REAL|STRING|CHAR|CHARACTER|BOOLEAN|BOOL|ARRAY)/i);
-            const varName = match[1];
-            const type = match[2].toUpperCase();
-            const typeDefaults = {
-                'NUMERIC': '0', 'INTEGER': '0', 'FLOAT': '0.0', 'REAL': '0.0',
-                'STRING': '""', 'CHAR': '""', 'CHARACTER': '""',
-                'BOOLEAN': 'False', 'BOOL': 'False', 'ARRAY': '[]'
-            };
-            const defaultVal = typeDefaults[type] || 'None';
-            pythonLines.push(indent(indentLevel) + `# DECLARE ${varName} AS ${type}`);
-            pythonLines.push(indent(indentLevel) + `${varName} = ${defaultVal}`);
-            continue;
-        }
-
-        // Handle variable type declarations: NUMERIC, STRING, BOOLEAN, etc.
-        if (/^(NUMERIC|INTEGER|FLOAT|REAL|STRING|CHAR|CHARACTER|BOOLEAN|BOOL)\s+(\w+)/i.test(line)) {
-            const match = line.match(/^(NUMERIC|INTEGER|FLOAT|REAL|STRING|CHAR|CHARACTER|BOOLEAN|BOOL)\s+(\w+)/i);
-            const typeDefaults = {
-                'NUMERIC': '0', 'INTEGER': '0', 'FLOAT': '0.0', 'REAL': '0.0',
-                'STRING': '""', 'CHAR': '""', 'CHARACTER': '""',
-                'BOOLEAN': 'False', 'BOOL': 'False'
-            };
-            const defaultVal = typeDefaults[match[1].toUpperCase()] || 'None';
-            pythonLines.push(indent(indentLevel) + `# ${match[1]} ${match[2]}`);
-            pythonLines.push(indent(indentLevel) + `${match[2]} = ${defaultVal}`);
-            continue;
-        }
-
-        // Handle direct assignment: variable = expression
-        if (/^([a-zA-Z0-9_]+(?:\[.+?\])?)\s*=\s*(.+)$/i.test(line)) {
-            const match = line.match(/^([a-zA-Z0-9_]+(?:\[.+?\])?)\s*=\s*(.+)$/);
-            pythonLines.push(indent(indentLevel) + `${match[1]} = ${translateExpr(match[2])}`);
-            continue;
-        }
-
-        pythonLines.push(indent(indentLevel) + `# ${line}`);
-    }
-
-    return pythonLines.join('\n');
-}
-
-function indent(level) { return '    '.repeat(level); }
-
-function translateCondition(cond) {
-    return cond
-        .replace(/\bAND\b/gi, 'and').replace(/\bOR\b/gi, 'or').replace(/\bNOT\b/gi, 'not')
-        .replace(/\bMOD\b/gi, '%')
-        .replace(/\b(\w+)\s*=\s*(?!=)/g, (m, v) => `${v} == `)
-        .replace(/\s*<>\s*/g, ' != ')
-        .replace(/\bTRUE\b/gi, 'True').replace(/\bFALSE\b/gi, 'False').replace(/\bNULL\b/gi, 'None')
-        .trim();
-}
-
-function translateExpr(expr) {
-    return expr
-        .replace(/\bMOD\b/gi, '%')
-        .replace(/\bTRUE\b/gi, 'True').replace(/\bFALSE\b/gi, 'False').replace(/\bNULL\b/gi, 'None')
-        .replace(/\bAND\b/gi, 'and').replace(/\bOR\b/gi, 'or').replace(/\bNOT\b/gi, 'not')
-        .trim();
+    const result = compilerEngine.compile(pseudocode);
+    return result.python;
 }
 
 
@@ -535,13 +349,13 @@ function translateExpr(expr) {
    ============================================================ */
 
 function executePython() {
-    const code = document.getElementById('python-output').value;
+    const code = document.getElementById('python-output').textContent;
     if (!code.trim()) { showToast('No Python code to execute. Translate first!', 'error'); return; }
     runPythonCode(code, 'console-output');
 }
 
 function executeFromTranslate() {
-    const code = document.getElementById('translate-output').value;
+    const code = document.getElementById('translate-output').textContent;
     if (!code.trim()) { showToast('No Python code to execute.', 'error'); return; }
     runPythonCode(code, 'translate-console');
 }
@@ -553,7 +367,7 @@ function executeFromExecPage() {
 }
 
 function instructorExecute() {
-    const code = document.getElementById('instructor-python-output').value;
+    const code = document.getElementById('instructor-python-output').textContent;
     if (!code.trim()) { showToast('No code to execute. Generate first!', 'error'); return; }
     runPythonCode(code, 'instructor-console');
 }
@@ -760,7 +574,7 @@ async function attemptExercise(id) {
     const ex = exercises.find(e => e.id === id);
     if (!ex) return;
     document.getElementById('pseudocode-editor').value = '';
-    document.getElementById('python-output').value = '';
+    document.getElementById('python-output').innerHTML = '';
     navigateTo('write-pseudocode');
     showToast(`Exercise loaded: ${ex.title}. Write your pseudocode!`, 'info');
 }
@@ -1226,10 +1040,12 @@ function handlePseudocodeUpload(event) {
 
 function clearEditor() {
     document.getElementById('pseudocode-editor').value = '';
-    document.getElementById('python-output').value = '';
+    document.getElementById('python-output').innerHTML = '';
     document.getElementById('console-output').textContent = 'Editor cleared. Ready for new pseudocode.';
     document.getElementById('console-output').className = 'output-content';
     document.getElementById('line-count').textContent = '0 lines';
+    currentErrorLineNumber = null;
+    updateGutter();
 }
 
 function clearOutput() {
@@ -1238,13 +1054,13 @@ function clearOutput() {
 }
 
 function copyPython() {
-    const code = document.getElementById('python-output').value;
+    const code = document.getElementById('python-output').textContent;
     if (!code) { showToast('No code to copy.', 'error'); return; }
     copyText(code);
 }
 
 function copyTranslateOutput() {
-    const code = document.getElementById('translate-output').value;
+    const code = document.getElementById('translate-output').textContent;
     if (!code) { showToast('No code to copy.', 'error'); return; }
     copyText(code);
 }
@@ -1264,7 +1080,7 @@ function copyText(text) {
 }
 
 function downloadPython() {
-    const code = document.getElementById('python-output').value;
+    const code = document.getElementById('python-output').textContent;
     if (!code) { showToast('No code to download.', 'error'); return; }
     const blob = new Blob([code], { type: 'text/x-python' });
     const url = URL.createObjectURL(blob);
@@ -1295,7 +1111,7 @@ const KNOWN_KEYWORDS = [
     'INPUT', 'READ', 'WITH', 'PROMPT',
     'INCREMENT', 'DECREMENT', 'APPEND',
     'AND', 'OR', 'NOT', 'MOD', 'TRUE', 'FALSE', 'NULL',
-    'NUMERIC', 'INTEGER', 'FLOAT', 'REAL', 'STRING', 'CHAR', 'CHARACTER', 'BOOLEAN', 'BOOL'
+    'NUMERIC', 'INTEGER', 'FLOAT', 'REAL', 'STRING', 'CHAR', 'CHARACTER', 'BOOLEAN', 'BOOL', 'DECLARE', 'AS'
 ];
 
 /**
@@ -1328,7 +1144,7 @@ function suggestKeyword(word) {
     const upper = word.toUpperCase();
     const displayKeywords = ['DISPLAY', 'PRINT', 'OUTPUT', 'SET', 'IF', 'ELSE', 'FOR', 'WHILE',
         'BEGIN', 'END', 'THEN', 'DO', 'EACH', 'FROM', 'RETURN', 'CALL',
-        'FUNCTION', 'PROCEDURE', 'INPUT', 'READ', 'INCREMENT', 'DECREMENT', 'APPEND'];
+        'FUNCTION', 'PROCEDURE', 'INPUT', 'READ', 'INCREMENT', 'DECREMENT', 'APPEND', 'DECLARE'];
 
     let bestMatch = null;
     let bestDist = Infinity;
@@ -1570,6 +1386,42 @@ function formatValidationErrors(errors) {
 }
 
 /**
+ * Render validation errors into HTML for terminal-like console window formatting.
+ */
+function renderHtmlErrors(errors) {
+    let output = '<div style="margin-bottom: 0.5rem; font-family: \'JetBrains Mono\', monospace;"><span class="error-text"># ❌ Syntax Errors Found:</span></div><div><span style="color: var(--text-muted);">#</span></div>';
+    for (const err of errors) {
+        let suggestionHtml = '';
+        if (err.suggestion) {
+            suggestionHtml = `<div><span class="suggestion-text">#   💡 Suggestion: ${err.suggestion}</span></div>`;
+        }
+        output += `<div style="margin-bottom: 0.5rem; font-family: 'JetBrains Mono', monospace;"><div><span class="error-text"># Line ${err.line}: ${err.message}</span></div>${suggestionHtml}<div><span style="color: var(--text-muted);">#</span></div></div>`;
+    }
+    output += '<div style="margin-top: 0.5rem; font-family: \'JetBrains Mono\', monospace;"><span class="error-text"># Fix the pseudocode before translation.</span></div>';
+    return output;
+}
+
+/**
+ * Handle updating the visual editor gutter line numbers dynamically.
+ */
+function updateGutter() {
+    const editor = document.getElementById('pseudocode-editor');
+    const gutter = document.getElementById('editor-gutter');
+    if (!editor || !gutter) return;
+
+    let linesCount = editor.value.split('\n').length;
+    // ensure at least one line is showing
+    if (linesCount === 0) linesCount = 1;
+
+    let html = '';
+    for (let i = 1; i <= linesCount; i++) {
+        const errorClass = (i === currentErrorLineNumber) ? ' error-line' : '';
+        html += `<div class="gutter-num${errorClass}">${i}</div>`;
+    }
+    gutter.innerHTML = html;
+}
+
+/**
  * Highlight error lines in the editor with a visual indicator.
  * Uses an overlay div to show error markers.
  */
@@ -1628,11 +1480,13 @@ function clearEditorErrors(editorId) {
 function newFile() {
     const editor = document.getElementById('pseudocode-editor');
     editor.value = 'BEGIN\n    // Write your pseudocode here\nEND';
-    document.getElementById('python-output').value = '';
+    document.getElementById('python-output').innerHTML = '';
     document.getElementById('console-output').textContent = 'New file created. Start writing your pseudocode.';
     document.getElementById('console-output').className = 'output-content';
     document.getElementById('line-count').textContent = '3 lines';
+    currentErrorLineNumber = null;
     clearEditorErrors('pseudocode-editor');
+    updateGutter();
 
     const runBtn = document.querySelector('#page-write-pseudocode .btn-success');
     if (runBtn) runBtn.disabled = false;
@@ -1763,3 +1617,4 @@ function togglePasswordVisibility(inputId, btn) {
     }
 }
 window.togglePasswordVisibility = togglePasswordVisibility;
+

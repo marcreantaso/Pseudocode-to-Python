@@ -2299,3 +2299,62 @@ select.form-input {
     gap: 0.35rem;
   }
 }
+
+/* ============================================================
+   EDITOR GUTTER & ERROR STYLING
+   ============================================================ */
+
+.editor-with-gutter {
+  display: flex;
+  height: 100%;
+  border-radius: var(--radius-md);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.editor-with-gutter .code-editor {
+  border: none;
+  border-radius: 0;
+  flex: 1;
+}
+
+.editor-gutter {
+  width: 40px;
+  background: rgba(255, 255, 255, 0.03);
+  border-right: 1px solid var(--border);
+  padding: 0.8rem 0; /* Usually matches standard form-input padding */
+  color: var(--text-muted);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.9rem;
+  text-align: right;
+  overflow: hidden;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.gutter-num {
+  padding-right: 8px;
+  line-height: inherit;
+  min-height: 1.5em; /* Fallback line-height */
+}
+
+.gutter-num.error-line {
+  background: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
+  border-left: 3px solid var(--error);
+  padding-right: 5px;
+}
+
+.error-text {
+  color: var(--error);
+}
+
+.suggestion-text {
+  color: var(--success);
+}
+
+.code-editor[data-placeholder]:empty::before {
+  content: attr(data-placeholder);
+  color: var(--text-muted);
+}
