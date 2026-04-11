@@ -26,13 +26,7 @@ let cachedActivity = [];
 async function init() {
     console.log('[App] init() called');
     try {
-        // === CLEANUP: Clear history + reset mdaet password ===
-        const _pw = await passwordRequestsRef.get();
-        for (const d of _pw.docs) { await d.ref.delete(); }
-        const _u = await usersRef.where('username', '==', 'mdaet').get();
-        for (const d of _u.docs) { await d.ref.update({ password: 'pass123' }); }
-        console.log('[App] Cleanup done: history cleared, mdaet=pass123');
-        // === END CLEANUP (remove after confirming) ===
+
 
         console.log('[App] Calling seedDatabase()...');
         // Seed the database if collections are empty
@@ -238,6 +232,7 @@ function navigateTo(pageId) {
         'generate-code': 'Generate Python Code',
         'manage-users': 'Administer User Accounts',
         'admin-execute': 'Execute Code',
+        'change-password': 'Change Password',
         'student-settings': 'Settings',
         'password-requests': 'Password Requests'
     };
@@ -333,14 +328,257 @@ function instructorTranslate() {
     showToast('Python code generated!', 'success');
 }
 
+<<<<<<< HEAD
 const compilerEngine = new PseudocodeCompiler();
+=======
+
+/* ============================================================
+   FILE UPLOAD (TEXT AND PDF)
+   ============================================================ */
+
+async function handleFileUpload(event, targetEditorId) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const editor = document.getElementById(targetEditorId);
+    
+    try {
+        if (file.type === 'text/plain' || file.name.endsWith('.txt') || file.name.endsWith('.pseudo')) {
+            const text = await file.text();
+            editor.value = text;
+            showToast('Text file loaded successfully!', 'success');
+        } else if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
+            if (typeof pdfjsLib === 'undefined') {
+                showToast('PDF library not loaded yet.', 'error');
+                return;
+            }
+            
+            showToast('Extracting PDF text...', 'info');
+            const arrayBuffer = await file.arrayBuffer();
+            const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+            
+            let fullText = '';
+            for (let i = 1; i <= pdf.numPages; i++) {
+                const page = await pdf.getPage(i);
+                const textContent = await page.getTextContent();
+                
+                // Keep some pseudo-formatting by roughly preserving Y-coordinates
+                let lastY = -1;
+                let pageText = '';
+                textContent.items.forEach(item => {
+                    if (lastY !== item.transform[5] && lastY !== -1) {
+                        pageText += '\n'; // new line
+                    }
+                    pageText += item.str;
+                    lastY = item.transform[5];
+                });
+                
+                fullText += pageText + '\n';
+            }
+            
+            editor.value = fullText.trim();
+            showToast('PDF loaded successfully!', 'success');
+        } else {
+            showToast('Unsupported file type. Please upload .txt or .pdf files.', 'error');
+        }
+    } catch (err) {
+        console.error('[FileUpload]', err);
+        showToast('Failed to read file.', 'error');
+    }
+    
+    // Reset file input so same file can be uploaded again
+    event.target.value = '';
+}
+
+>>>>>>> a1194aa60e997290d47490f19ba16c70925b7188
 /**
  * Compiler Facade: Translation Engine
  * Converts structured pseudocode into valid Python via AST code generation.
  */
 function pseudocodeToPython(pseudocode) {
+<<<<<<< HEAD
     const result = compilerEngine.compile(pseudocode);
     return result.python;
+=======
+    const lines = pseudocode.split('\n');
+    const pythonLines = [];
+    let indentLevel = 0;
+    const numericVars = new Set(); // Track variables declared as NUMERIC/INTEGER/FLOAT
+
+    for (let i = 0; i < lines.length; i++) {
+        let line = lines[i].trim();
+
+        if (!line) { pythonLines.push(''); continue; }
+        if (/^BEGIN$/i.test(line)) continue;
+        if (/^END$/i.test(line)) continue;
+
+        if (line.startsWith('//') || line.startsWith('#')) {
+            pythonLines.push(indent(indentLevel) + '# ' + line.replace(/^\/\/\s*|^#\s*/, ''));
+            continue;
+        }
+
+        if (/^END\s+(IF|FOR|WHILE|FUNCTION|PROCEDURE)/i.test(line)) {
+            indentLevel = Math.max(0, indentLevel - 1);
+            continue;
+        }
+
+        if (/^ELSE\s+IF\s+(.+)\s+THEN$/i.test(line)) {
+            indentLevel = Math.max(0, indentLevel - 1);
+            const match = line.match(/^ELSE\s+IF\s+(.+)\s+THEN$/i);
+            pythonLines.push(indent(indentLevel) + `elif ${translateCondition(match[1])}:`);
+            indentLevel++;
+            continue;
+        }
+
+        if (/^ELSE$/i.test(line)) {
+            indentLevel = Math.max(0, indentLevel - 1);
+            pythonLines.push(indent(indentLevel) + 'else:');
+            indentLevel++;
+            continue;
+        }
+
+        if (/^IF\s+(.+)\s+THEN$/i.test(line)) {
+            const match = line.match(/^IF\s+(.+)\s+THEN$/i);
+            pythonLines.push(indent(indentLevel) + `if ${translateCondition(match[1])}:`);
+            indentLevel++;
+            continue;
+        }
+
+        if (/^FOR\s+EACH\s+(\w+)\s+IN\s+(.+)\s+DO$/i.test(line)) {
+            const match = line.match(/^FOR\s+EACH\s+(\w+)\s+IN\s+(.+)\s+DO$/i);
+            pythonLines.push(indent(indentLevel) + `for ${match[1]} in ${translateExpr(match[2])}:`);
+            indentLevel++;
+            continue;
+        }
+
+        if (/^FOR\s+(\w+)\s+FROM\s+(.+)\s+TO\s+(.+)\s+DO$/i.test(line)) {
+            const match = line.match(/^FOR\s+(\w+)\s+FROM\s+(.+)\s+TO\s+(.+)\s+DO$/i);
+            pythonLines.push(indent(indentLevel) + `for ${match[1]} in range(${translateExpr(match[2])}, ${translateExpr(match[3])} + 1):`);
+            indentLevel++;
+            continue;
+        }
+
+        if (/^WHILE\s+(.+)\s+DO$/i.test(line)) {
+            const match = line.match(/^WHILE\s+(.+)\s+DO$/i);
+            pythonLines.push(indent(indentLevel) + `while ${translateCondition(match[1])}:`);
+            indentLevel++;
+            continue;
+        }
+
+        if (/^(FUNCTION|PROCEDURE)\s+(\w+)\s*\((.*)?\)$/i.test(line)) {
+            const match = line.match(/^(FUNCTION|PROCEDURE)\s+(\w+)\s*\((.*)?\)$/i);
+            pythonLines.push(indent(indentLevel) + `def ${match[2]}(${match[3] ? match[3].trim() : ''}):`);
+            indentLevel++;
+            continue;
+        }
+
+        if (/^RETURN\s+(.+)$/i.test(line)) {
+            const match = line.match(/^RETURN\s+(.+)$/i);
+            pythonLines.push(indent(indentLevel) + `return ${translateExpr(match[1])}`);
+            continue;
+        }
+
+        if (/^CALL\s+(\w+)\s*\((.*)?\)$/i.test(line)) {
+            const match = line.match(/^CALL\s+(\w+)\s*\((.*)?\)$/i);
+            pythonLines.push(indent(indentLevel) + `${match[1]}(${match[2] ? translateExpr(match[2]) : ''})`);
+            continue;
+        }
+
+        if (/^SET\s+(\w+)\s+TO\s+(.+)$/i.test(line)) {
+            const match = line.match(/^SET\s+(\w+)\s+TO\s+(.+)$/i);
+            pythonLines.push(indent(indentLevel) + `${match[1]} = ${translateExpr(match[2])}`);
+            continue;
+        }
+
+        if (/^(DISPLAY|PRINT|OUTPUT)\s+(.+)$/i.test(line)) {
+            const match = line.match(/^(DISPLAY|PRINT|OUTPUT)\s+(.+)$/i);
+            pythonLines.push(indent(indentLevel) + `print(${translateExpr(match[2])})`);
+            continue;
+        }
+
+        // INPUT WITH PROMPT must come before plain INPUT (more specific first)
+        if (/^(INPUT|READ)\s+(\w+)\s+WITH\s+PROMPT\s+"(.+)"$/i.test(line)) {
+            const match = line.match(/^(INPUT|READ)\s+(\w+)\s+WITH\s+PROMPT\s+"(.+)"$/i);
+            const inputExpr = `input("${match[3]}")`;
+            pythonLines.push(indent(indentLevel) + `${match[2]} = ${numericVars.has(match[2]) ? 'int(' + inputExpr + ')' : inputExpr}`);
+            continue;
+        }
+
+        if (/^(INPUT|READ)\s+(\w+)$/i.test(line)) {
+            const match = line.match(/^(INPUT|READ)\s+(\w+)$/i);
+            const inputExpr = 'input()';
+            pythonLines.push(indent(indentLevel) + `${match[2]} = ${numericVars.has(match[2]) ? 'int(' + inputExpr + ')' : inputExpr}`);
+            continue;
+        }
+
+        if (/^INCREMENT\s+(\w+)$/i.test(line)) {
+            const match = line.match(/^INCREMENT\s+(\w+)$/i);
+            pythonLines.push(indent(indentLevel) + `${match[1]} += 1`);
+            continue;
+        }
+        if (/^DECREMENT\s+(\w+)$/i.test(line)) {
+            const match = line.match(/^DECREMENT\s+(\w+)$/i);
+            pythonLines.push(indent(indentLevel) + `${match[1]} -= 1`);
+            continue;
+        }
+
+        if (/^APPEND\s+(.+)\s+TO\s+(\w+)$/i.test(line)) {
+            const match = line.match(/^APPEND\s+(.+)\s+TO\s+(\w+)$/i);
+            pythonLines.push(indent(indentLevel) + `${match[2]}.append(${translateExpr(match[1])})`);
+            continue;
+        }
+
+        // Handle variable type declarations: NUMERIC, STRING, BOOLEAN, etc.
+        if (/^(NUMERIC|INTEGER|FLOAT|REAL|STRING|CHAR|CHARACTER|BOOLEAN|BOOL)\s+(\w+)/i.test(line)) {
+            const match = line.match(/^(NUMERIC|INTEGER|FLOAT|REAL|STRING|CHAR|CHARACTER|BOOLEAN|BOOL)\s+(\w+)/i);
+            const upperType = match[1].toUpperCase();
+            // Track numeric variables so INPUT can wrap with int()
+            if (['NUMERIC', 'INTEGER', 'FLOAT', 'REAL'].includes(upperType)) {
+                numericVars.add(match[2]);
+            }
+            const typeDefaults = {
+                'NUMERIC': '0', 'INTEGER': '0', 'FLOAT': '0.0', 'REAL': '0.0',
+                'STRING': '""', 'CHAR': '""', 'CHARACTER': '""',
+                'BOOLEAN': 'False', 'BOOL': 'False'
+            };
+            const defaultVal = typeDefaults[upperType] || 'None';
+            pythonLines.push(indent(indentLevel) + `# ${match[1]} ${match[2]}`);
+            pythonLines.push(indent(indentLevel) + `${match[2]} = ${defaultVal}`);
+            continue;
+        }
+
+        // Handle direct assignment: variable = expression
+        if (/^(\w+)\s*=\s*(.+)$/i.test(line)) {
+            const match = line.match(/^(\w+)\s*=\s*(.+)$/);
+            pythonLines.push(indent(indentLevel) + `${match[1]} = ${translateExpr(match[2])}`);
+            continue;
+        }
+
+        pythonLines.push(indent(indentLevel) + `# ${line}`);
+    }
+
+    return pythonLines.join('\n');
+}
+
+function indent(level) { return '    '.repeat(level); }
+
+function translateCondition(cond) {
+    return cond
+        .replace(/\bAND\b/gi, 'and').replace(/\bOR\b/gi, 'or').replace(/\bNOT\b/gi, 'not')
+        .replace(/\bMOD\b/gi, '%')
+        .replace(/\b(\w+)\s*=\s*(?!=)/g, (m, v) => `${v} == `)
+        .replace(/\s*<>\s*/g, ' != ')
+        .replace(/\bTRUE\b/gi, 'True').replace(/\bFALSE\b/gi, 'False').replace(/\bNULL\b/gi, 'None')
+        .trim();
+}
+
+function translateExpr(expr) {
+    return expr
+        .replace(/\bMOD\b/gi, '%')
+        .replace(/\bTRUE\b/gi, 'True').replace(/\bFALSE\b/gi, 'False').replace(/\bNULL\b/gi, 'None')
+        .replace(/\bAND\b/gi, 'and').replace(/\bOR\b/gi, 'or').replace(/\bNOT\b/gi, 'not')
+        .trim();
+>>>>>>> a1194aa60e997290d47490f19ba16c70925b7188
 }
 
 
@@ -380,7 +618,7 @@ function adminExecute() {
 
 function runPythonCode(code, outputElementId) {
     const outputEl = document.getElementById(outputElementId);
-    outputEl.textContent = '';
+    outputEl.innerHTML = '';
     outputEl.className = 'output-content';
 
     let cleanCode = code.replace(/print\((.+)\)/g, (match, content) => {
@@ -401,26 +639,96 @@ function runPythonCode(code, outputElementId) {
         return;
     }
 
-    let outputText = '';
+    // Helper: append text to the console output (HTML-safe)
+    function appendOutput(text) {
+        const span = document.createElement('span');
+        span.textContent = text;
+        outputEl.appendChild(span);
+    }
+
     Sk.configure({
-        output: function (text) { outputText += text; outputEl.textContent = outputText; },
+        output: function (text) { appendOutput(text); },
         read: function (x) {
             if (Sk.builtinFiles === undefined || Sk.builtinFiles["files"][x] === undefined) throw "File not found: '" + x + "'";
             return Sk.builtinFiles["files"][x];
         },
+        inputfun: function (promptText) {
+            return new Promise(function (resolve) {
+                // Create the inline input container
+                const container = document.createElement('div');
+                container.className = 'skulpt-input-container';
+
+                // Prompt label
+                if (promptText) {
+                    const label = document.createElement('div');
+                    label.className = 'skulpt-input-label';
+                    label.textContent = promptText;
+                    container.appendChild(label);
+                }
+
+                // Input row (input + button)
+                const row = document.createElement('div');
+                row.className = 'skulpt-input-row';
+
+                const inputField = document.createElement('input');
+                inputField.type = 'text';
+                inputField.className = 'skulpt-input-field';
+                inputField.placeholder = 'Type your answer here...';
+                inputField.autocomplete = 'off';
+
+                const submitBtn = document.createElement('button');
+                submitBtn.className = 'skulpt-input-btn';
+                submitBtn.textContent = 'Submit ↵';
+
+                row.appendChild(inputField);
+                row.appendChild(submitBtn);
+                container.appendChild(row);
+                outputEl.appendChild(container);
+
+                // Scroll to make input visible
+                outputEl.scrollTop = outputEl.scrollHeight;
+                inputField.focus();
+
+                function submitInput() {
+                    const value = inputField.value;
+                    // Replace input container with echoed value
+                    const echo = document.createElement('div');
+                    echo.className = 'skulpt-input-echo';
+                    if (promptText) {
+                        echo.innerHTML = '<span class="skulpt-echo-prompt">' + escapeHtml(promptText) + '</span> <span class="skulpt-echo-value">' + escapeHtml(value) + '</span>';
+                    } else {
+                        echo.innerHTML = '<span class="skulpt-echo-prompt">▸ Input:</span> <span class="skulpt-echo-value">' + escapeHtml(value) + '</span>';
+                    }
+                    container.replaceWith(echo);
+                    resolve(value);
+                }
+
+                submitBtn.addEventListener('click', submitInput);
+                inputField.addEventListener('keydown', function (e) {
+                    if (e.key === 'Enter') { e.preventDefault(); submitInput(); }
+                });
+            });
+        },
+        inputfunTakesPrompt: true,
         __future__: Sk.python3
     });
 
     Sk.misceval.asyncToPromise(function () {
         return Sk.importMainWithBody("<stdin>", false, cleanCode, true);
     }).then(function () {
-        if (!outputText.trim()) outputEl.textContent = '✅ Code executed successfully (no output).';
+        if (!outputEl.textContent.trim()) outputEl.textContent = '✅ Code executed successfully (no output).';
         showToast('Code executed successfully!', 'success');
     }).catch(function (err) {
-        outputEl.textContent = '❌ Error: ' + err.toString();
+        appendOutput('\n❌ Error: ' + err.toString());
         outputEl.className = 'output-content error';
         showToast('Runtime error occurred.', 'error');
     });
+}
+
+function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
 }
 
 function simulateExecution(code) {
@@ -675,6 +983,13 @@ async function loadUsers() {
     <tr>
       <td><div class="user-cell"><div class="avatar-sm">${u.fullName.charAt(0)}</div><div><div style="font-weight:600;color:var(--text-primary)">${u.fullName}</div><div style="font-size:0.75rem;color:var(--text-muted)">@${u.username}</div></div></div></td>
       <td>${u.email}</td>
+      <td>
+        <div style="display:flex; align-items:center; gap:0.5rem">
+          <span id="pwd-masked-${u.id}" style="font-family: monospace; letter-spacing: 2px;">••••••</span>
+          <span id="pwd-real-${u.id}" class="hidden" style="font-family: monospace;">${u.password}</span>
+          <button class="btn btn-ghost btn-icon" onclick="toggleUserPasswordVisibility('${u.id}')" style="font-size: 0.9rem; opacity: 0.7; padding: 2px;">👁️</button>
+        </div>
+      </td>
       <td><span class="badge ${badgeClasses[u.role]}">${roleLabels[u.role]}</span></td>
       <td><span class="badge ${u.status === 'active' ? 'badge-active' : 'badge-inactive'}">${u.status}</span></td>
       <td><div style="display:flex;gap:0.5rem">
@@ -699,6 +1014,7 @@ async function openUserModal(id = null) {
             document.getElementById('user-email').value = user.email;
             document.getElementById('user-password').value = user.password;
             document.getElementById('user-role-select').value = user.role;
+            document.getElementById('user-password-group').classList.add('hidden');
         }
     } else {
         title.textContent = 'Add New User';
@@ -707,6 +1023,7 @@ async function openUserModal(id = null) {
         document.getElementById('user-email').value = '';
         document.getElementById('user-password').value = '';
         document.getElementById('user-role-select').value = 'student';
+        document.getElementById('user-password-group').classList.remove('hidden');
     }
     modal.classList.remove('hidden');
 }
@@ -723,7 +1040,7 @@ async function saveUser() {
     const password = document.getElementById('user-password').value.trim();
     const role = document.getElementById('user-role-select').value;
 
-    if (!fullName || !username || !email || !password) { showToast('Please fill in all fields.', 'error'); return; }
+    if (!fullName || !username || !email || (!editingUserId && !password)) { showToast('Please fill in all required fields.', 'error'); return; }
 
     try {
         const users = cachedUsers.length ? cachedUsers : await refreshUsers();
@@ -732,7 +1049,7 @@ async function saveUser() {
 
         if (editingUserId) {
             const user = users.find(u => u.id === editingUserId);
-            if (user) await fbUpdate(usersRef, user._docId, { fullName, username, email, password, role });
+            if (user) await fbUpdate(usersRef, user._docId, { fullName, username, email, role });
             showToast('User updated successfully!', 'success');
         } else {
             const newId = 'u' + Date.now();
@@ -1618,3 +1935,74 @@ function togglePasswordVisibility(inputId, btn) {
 }
 window.togglePasswordVisibility = togglePasswordVisibility;
 
+<<<<<<< HEAD
+=======
+/* ============================================================
+   PASSWORD MANAGEMENT
+   ============================================================ */
+
+async function handleChangePassword() {
+    const currentParam = document.getElementById('cp-current-password').value;
+    const newParam = document.getElementById('cp-new-password').value;
+    const confirmParam = document.getElementById('cp-confirm-password').value;
+
+    if (!currentParam || !newParam || !confirmParam) {
+        showToast('Please fill in all fields.', 'error');
+        return;
+    }
+
+    if (currentParam !== currentUser.password) {
+        showToast('Incorrect current password.', 'error');
+        return;
+    }
+
+    if (newParam === currentParam) {
+        showToast('New password cannot be the same as current password.', 'warning');
+        return;
+    }
+
+    if (newParam.length < 6) {
+        showToast('New password must be at least 6 characters.', 'error');
+        return;
+    }
+
+    if (newParam !== confirmParam) {
+        showToast('New passwords do not match.', 'error');
+        return;
+    }
+
+    try {
+        await fbUpdate(usersRef, currentUser._docId, { password: newParam });
+        currentUser.password = newParam; // Update local state immediately
+        
+        // Update cached array so it's fresh
+        const uIndex = cachedUsers.findIndex(u => u.id === currentUser.id);
+        if (uIndex !== -1) cachedUsers[uIndex].password = newParam;
+        
+        showToast('Password updated successfully!', 'success');
+        
+        // Clear fields
+        document.getElementById('cp-current-password').value = '';
+        document.getElementById('cp-new-password').value = '';
+        document.getElementById('cp-confirm-password').value = '';
+    } catch (err) {
+        console.error('[Firestore] Change password error:', err);
+        showToast('Failed to update password.', 'error');
+    }
+}
+
+function toggleUserPasswordVisibility(userId) {
+    const masked = document.getElementById(`pwd-masked-${userId}`);
+    const real = document.getElementById(`pwd-real-${userId}`);
+    
+    if (masked && real) {
+        if (masked.classList.contains('hidden')) {
+            masked.classList.remove('hidden');
+            real.classList.add('hidden');
+        } else {
+            masked.classList.add('hidden');
+            real.classList.remove('hidden');
+        }
+    }
+}
+>>>>>>> a1194aa60e997290d47490f19ba16c70925b7188
