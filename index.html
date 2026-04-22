@@ -192,6 +192,9 @@
           <button class="nav-item" onclick="navigateTo('generate-code')">
             <span class="nav-icon">🐍</span> Generate Python Code
           </button>
+          <button class="nav-item" onclick="navigateTo('compiler-metrics')">
+            <span class="nav-icon">🧪</span> Compiler Metrics
+          </button>
           <button class="nav-item" onclick="navigateTo('change-password')">
             <span class="nav-icon">🔑</span> Change Password
           </button>
@@ -601,6 +604,143 @@
       </div>
 
       <!-- ═══════════════════════════════════
+           PAGE: Compiler Metrics (Instructor)
+           ═══════════════════════════════════ -->
+      <div id="page-compiler-metrics" class="page-view hidden">
+        <div class="page-header">
+          <div>
+            <h2>🧪 Compiler Metrics &amp; Evaluation</h2>
+            <p>Formal evaluation metrics: accuracy, precision/recall, compilation rates, and pipeline performance.</p>
+          </div>
+          <button id="run-benchmark-btn" class="btn btn-primary" style="width:auto" onclick="runBenchmarkTest()">
+            🧪 Run Benchmark
+          </button>
+        </div>
+
+        <!-- Session Metrics -->
+        <div class="stats-grid" style="margin-bottom:1.5rem">
+          <div class="stat-card">
+            <div class="stat-icon">🔄</div>
+            <div class="stat-value" id="metric-total-translations">0</div>
+            <div class="stat-label">Total Translations</div>
+            <div class="stat-change" id="metric-error-trend">— Stable</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon">✅</div>
+            <div class="stat-value" id="metric-compilation-rate">0%</div>
+            <div class="stat-label">Compilation Success Rate</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon">❌</div>
+            <div class="stat-value" id="metric-runtime-error-rate">0%</div>
+            <div class="stat-label">Runtime Error Rate</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon">⏱️</div>
+            <div class="stat-value" id="metric-avg-gen-time">0ms</div>
+            <div class="stat-label">Avg Generation Time</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon">⚠️</div>
+            <div class="stat-value" id="metric-total-errors">0</div>
+            <div class="stat-label">Total Errors</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon">▶️</div>
+            <div class="stat-value" id="metric-total-executions">0</div>
+            <div class="stat-label">Total Executions</div>
+          </div>
+        </div>
+
+        <!-- Improvement Tracking -->
+        <div class="data-table-container" style="margin-bottom:1.5rem">
+          <div class="panel-header">
+            <h3>📈 Improvement Tracking</h3>
+          </div>
+          <div id="metrics-improvement-section" style="padding:1rem;">
+            <div class="empty-state" style="padding: 1.5rem;">
+              <div class="empty-icon">📊</div>
+              <h3>No Improvement Data Yet</h3>
+              <p>Need at least 2 translations to calculate improvement.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Pipeline Timing Chart -->
+        <div class="charts-grid" style="margin-bottom:1.5rem">
+          <div class="chart-container">
+            <div class="panel-header">
+              <h3>⏱️ Pipeline Stage Timing (Avg)</h3>
+            </div>
+            <div id="chart-pipeline-timing" class="chart-body" style="padding-bottom:2.5rem">
+              <div style="text-align:center;color:var(--text-muted);padding:2rem;">No timing data yet. Translate some pseudocode first.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Benchmark Results -->
+        <div class="stats-grid" style="margin-bottom:1.5rem">
+          <div class="stat-card">
+            <div class="stat-icon">🎯</div>
+            <div class="stat-value" id="benchmark-accuracy">—</div>
+            <div class="stat-label">Accuracy</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon">🔍</div>
+            <div class="stat-value" id="benchmark-precision">—</div>
+            <div class="stat-label">Avg Precision</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon">📡</div>
+            <div class="stat-value" id="benchmark-recall">—</div>
+            <div class="stat-label">Avg Recall</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon">📊</div>
+            <div class="stat-value" id="benchmark-f1">—</div>
+            <div class="stat-label">F1 Score</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon">🔧</div>
+            <div class="stat-value" id="benchmark-compile-rate">—</div>
+            <div class="stat-label">Compile Rate</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon">⚡</div>
+            <div class="stat-value" id="benchmark-avg-time">—</div>
+            <div class="stat-label">Avg Time / Test</div>
+          </div>
+        </div>
+
+        <!-- Detailed Benchmark Table -->
+        <div class="data-table-container">
+          <div class="panel-header">
+            <h3>📋 Benchmark Test Results (dataset.json)</h3>
+          </div>
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Concept</th>
+                <th>Compiled</th>
+                <th>Exact Match</th>
+                <th>Precision</th>
+                <th>Recall</th>
+                <th>Time</th>
+              </tr>
+            </thead>
+            <tbody id="benchmark-results-body">
+              <tr>
+                <td colspan="7" style="text-align:center;padding:2rem;color:var(--text-muted)">
+                  Click "Run Benchmark" to test against dataset.json ground truth.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════
            PAGE: Manage Users (Admin)
            ═══════════════════════════════════ -->
       <div id="page-manage-users" class="page-view hidden">
@@ -1000,6 +1140,7 @@
 
   <!-- App Logic -->
   <script src="compiler.js"></script>
+  <script src="metrics.js"></script>
   <script src="app.js"></script>
 
   <!-- Service Worker Registration -->

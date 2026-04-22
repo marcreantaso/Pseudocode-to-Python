@@ -1057,30 +1057,52 @@ class PseudocodeCompiler {
      *   4. CodeGenerator.generate()  — SDT tree-walk → Python emission
      */
     compile(code) {
+        const pipelineStart = performance.now();
 
         // ── Stage 1: Lexical Analysis ──
+        const t1 = performance.now();
         const lexer = new Lexer(code);
         const tokens = lexer.tokenize();
+        const lexTime = performance.now() - t1;
 
         // ── Stage 2: Syntax Analysis (CFG + LIFO stack validation) ──
+        const t2 = performance.now();
         const parser = new Parser(tokens);
         const ast = parser.parse();
+        const parseTime = performance.now() - t2;
 
         // ── Stage 3: Semantic Analysis (pre-execution variable check) ──
+        const t3 = performance.now();
         const semanticAnalyzer = new SemanticAnalyzer();
         const warnings = semanticAnalyzer.analyze(ast);
+        const semanticTime = performance.now() - t3;
+
+        // Build pipeline metrics object
+        const metrics = {
+            lexTime: parseFloat(lexTime.toFixed(3)),
+            parseTime: parseFloat(parseTime.toFixed(3)),
+            semanticTime: parseFloat(semanticTime.toFixed(3)),
+            codeGenTime: 0,
+            totalTime: 0,
+            tokenCount: tokens.length,
+            astNodeCount: ast.body ? ast.body.length : 0
+        };
 
         // Syntax errors are hard stops — no code generation
         if (ast.errors.length > 0) {
-            return { valid: false, python: '', errors: ast.errors, warnings: warnings };
+            metrics.totalTime = parseFloat((performance.now() - pipelineStart).toFixed(3));
+            return { valid: false, python: '', errors: ast.errors, warnings: warnings, metrics: metrics };
         }
 
         // ── Stage 4: Code Generation (SDT tree-walk) ──
+        const t4 = performance.now();
         const generator = new CodeGenerator();
         const pythonCode = generator.generate(ast);
+        metrics.codeGenTime = parseFloat((performance.now() - t4).toFixed(3));
 
+        metrics.totalTime = parseFloat((performance.now() - pipelineStart).toFixed(3));
 
-        return { valid: true, python: pythonCode, errors: [], warnings: warnings };
+        return { valid: true, python: pythonCode, errors: [], warnings: warnings, metrics: metrics };
     }
 
     /**
