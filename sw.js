@@ -3,11 +3,12 @@
    Offline-first caching strategy
    ============================================================ */
 
-const CACHE_NAME = 'pseudopy-v11';
+const CACHE_NAME = 'pseudopy-v12';
 const ASSETS_TO_CACHE = [
     '/',
     '/index.html',
     '/style.css',
+    '/mapper.js',
     '/app.js',
     '/compiler.js',
     '/metrics.js',

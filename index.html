@@ -1123,11 +1123,7 @@
 
 
 
-  <!-- Firebase Compat SDK (v9 compat mode) -->
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-
-  <!-- Firebase Config & Seed -->
+  <!-- Database Config & Seed (Offline LocalStorage) -->
   <script src="firebase-config.js"></script>
 
   <!-- Skulpt for Python execution -->
@@ -1139,6 +1135,7 @@
   <script>pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
 
   <!-- App Logic -->
+  <script src="mapper.js"></script>
   <script src="compiler.js"></script>
   <script src="metrics.js"></script>
   <script src="app.js"></script>
@@ -1147,7 +1144,7 @@
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js')
+        navigator.serviceWorker.register('sw.js')
           .then(reg => console.log('[PWA] Service Worker registered:', reg.scope))
           .catch(err => console.warn('[PWA] SW registration failed:', err));
       });

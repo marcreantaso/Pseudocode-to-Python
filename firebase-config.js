@@ -1,72 +1,79 @@
 // ============================================================
-// FIREBASE CONFIGURATION — PseudoPy
-// Uses Firebase Compat SDK (loaded via <script> tags in HTML)
+// LOCAL STORAGE CONFIGURATION — PseudoPy
+// Offline persistence to replace Firebase
 // ============================================================
 
-// ══════════════════════════════════════════════════════════════
-//  FIREBASE CONFIG
-// ══════════════════════════════════════════════════════════════
-const firebaseConfig = {
-    apiKey: "AIzaSyANMOC1h2rbe5faLKdp_00cX0j6wRml5kc",
-    authDomain: "pseudocode-to-python.firebaseapp.com",
-    projectId: "pseudocode-to-python",
-    storageBucket: "pseudocode-to-python.firebasestorage.app",
-    messagingSenderId: "461301500065",
-    appId: "1:461301500065:web:789a924d4bd075629a08e0",
-    measurementId: "G-90JF0NYWLB"
-};
+console.log('[Database] Initialized with LocalStorage (Offline Mode)');
 
-// Initialize Firebase
-firebase.initializeApp(firebaseConfig);
-const db = firebase.firestore();
+// ── Collection References (Keys) ──
+const usersRef = "pseudopy_users";
+const exercisesRef = "pseudopy_exercises";
+const activityRef = "pseudopy_activity";
+const passwordRequestsRef = "pseudopy_passwordRequests";
 
-// ── Collection References ──
-const usersRef = db.collection("users");
-const exercisesRef = db.collection("exercises");
-const activityRef = db.collection("activity");
-const passwordRequestsRef = db.collection("passwordRequests");
+// Helper to get collection from LocalStorage
+function getCollection(ref) {
+    const data = localStorage.getItem(ref);
+    return data ? JSON.parse(data) : {};
+}
 
-console.log('[Firebase] Initialized with project:', firebaseConfig.projectId);
+// Helper to save collection to LocalStorage
+function saveCollection(ref, dataObj) {
+    localStorage.setItem(ref, JSON.stringify(dataObj));
+}
 
 // ══════════════════════════════════════════════════════════════
-//  FIRESTORE HELPER FUNCTIONS
+//  LOCAL STORAGE HELPER FUNCTIONS (API matches old Firestore API)
 // ══════════════════════════════════════════════════════════════
 
 /**
  * Get all documents from a collection
  */
 async function fbGetAll(ref) {
-    const snapshot = await ref.get();
-    return snapshot.docs.map(d => ({ _docId: d.id, ...d.data() }));
+    const col = getCollection(ref);
+    return Object.keys(col).map(id => ({ _docId: id, ...col[id] }));
 }
 
 /**
  * Add a new document (auto-generated ID)
  */
 async function fbAdd(ref, data) {
-    const docRef = await ref.add(data);
-    return docRef.id;
+    const col = getCollection(ref);
+    const docId = 'doc_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+    col[docId] = data;
+    saveCollection(ref, col);
+    return docId;
 }
 
 /**
  * Set a document with a specific ID
  */
 async function fbSet(ref, docId, data) {
-    await ref.doc(docId).set(data);
+    const col = getCollection(ref);
+    col[docId] = data;
+    saveCollection(ref, col);
 }
 
 /**
  * Update specific fields on an existing document
  */
 async function fbUpdate(ref, docId, data) {
-    await ref.doc(docId).update(data);
+    const col = getCollection(ref);
+    if (col[docId]) {
+        col[docId] = { ...col[docId], ...data };
+        saveCollection(ref, col);
+    }
 }
 
 /**
- * Delete a document by its Firestore doc ID
+ * Delete a document by its ID
  */
 async function fbDelete(ref, docId) {
-    await ref.doc(docId).delete();
+    const col = getCollection(ref);
+    if (col[docId]) {
+        delete col[docId];
+        saveCollection(ref, col);
+    }
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -130,44 +137,29 @@ const SEED_ACTIVITY = [
 
 async function seedDatabase() {
     try {
-        // Check if users collection is empty
-        const existingUsers = await usersRef.get();
-        if (existingUsers.empty) {
-            console.log('[Firebase] Seeding users...');
-            for (const user of SEED_USERS) {
-                await usersRef.doc(user.id).set(user);
-            }
-            console.log('[Firebase] Users seeded ✅');
-        } else {
-            console.log('[Firebase] Users already exist, skipping seed.');
+        const existingUsers = getCollection(usersRef);
+        if (Object.keys(existingUsers).length === 0) {
+            console.log('[Database] Seeding users...');
+            for (const user of SEED_USERS) await fbSet(usersRef, user.id, user);
+            console.log('[Database] Users seeded ✅');
         }
 
-        // Check if exercises collection is empty
-        const existingExercises = await exercisesRef.get();
-        if (existingExercises.empty) {
-            console.log('[Firebase] Seeding exercises...');
-            for (const ex of SEED_EXERCISES) {
-                await exercisesRef.doc(ex.id).set(ex);
-            }
-            console.log('[Firebase] Exercises seeded ✅');
-        } else {
-            console.log('[Firebase] Exercises already exist, skipping seed.');
+        const existingExercises = getCollection(exercisesRef);
+        if (Object.keys(existingExercises).length === 0) {
+            console.log('[Database] Seeding exercises...');
+            for (const ex of SEED_EXERCISES) await fbSet(exercisesRef, ex.id, ex);
+            console.log('[Database] Exercises seeded ✅');
         }
 
-        // Check if activity collection is empty
-        const existingActivity = await activityRef.get();
-        if (existingActivity.empty) {
-            console.log('[Firebase] Seeding activity...');
-            for (const act of SEED_ACTIVITY) {
-                await activityRef.add(act);
-            }
-            console.log('[Firebase] Activity seeded ✅');
-        } else {
-            console.log('[Firebase] Activity already exists, skipping seed.');
+        const existingActivity = getCollection(activityRef);
+        if (Object.keys(existingActivity).length === 0) {
+            console.log('[Database] Seeding activity...');
+            for (const act of SEED_ACTIVITY) await fbAdd(activityRef, act);
+            console.log('[Database] Activity seeded ✅');
         }
 
-        console.log('[Firebase] Database ready ✅');
+        console.log('[Database] Ready ✅');
     } catch (err) {
-        console.error('[Firebase] Seed error:', err);
+        console.error('[Database] Seed error:', err);
     }
 }

@@ -2150,10 +2150,7 @@ function togglePasswordVisibility(inputId, btn) {
     if (input.type === 'password') {
         input.type = 'text';
         btn.textContent = '🙈'; // Closed eye
-    } else {
-        input.type = 'password';
-        btn.textContent = '👁️'; // Open eye
-    }
+}
 }
 window.togglePasswordVisibility = togglePasswordVisibility;
 
@@ -2227,3 +2224,135 @@ function toggleUserPasswordVisibility(userId) {
     }
 }
 
+/* ============================================================
+   COMPILER METRICS (Panel 1 Requirement)
+   ============================================================ */
+
+function loadCompilerMetrics() {
+    if (typeof metricsEngine === 'undefined') return;
+
+    // Load Session Stats
+    const session = metricsEngine.getSessionMetrics();
+    document.getElementById('metric-total-translations').textContent = session.totalTranslations;
+    document.getElementById('metric-compilation-rate').textContent = session.compilationSuccessRate + '%';
+    document.getElementById('metric-runtime-error-rate').textContent = session.runtimeErrorRate + '%';
+    document.getElementById('metric-avg-gen-time').textContent = session.avgGenerationTime + 'ms';
+    document.getElementById('metric-total-errors').textContent = session.totalErrors;
+    document.getElementById('metric-total-executions').textContent = session.totalExecutions;
+
+    const trendEl = document.getElementById('metric-error-trend');
+    if (session.errorTrend === 'improving') {
+        trendEl.innerHTML = '↓ Improving';
+        trendEl.className = 'stat-change positive';
+    } else if (session.errorTrend === 'declining') {
+        trendEl.innerHTML = '↑ Declining';
+        trendEl.className = 'stat-change negative';
+    } else {
+        trendEl.innerHTML = '— Stable';
+        trendEl.className = 'stat-change';
+    }
+
+    // Load Improvement Tracking
+    const improvement = metricsEngine.getImprovementMetrics();
+    const impSection = document.getElementById('metrics-improvement-section');
+    if (improvement.hasData) {
+        impSection.innerHTML = `
+            <div style="display: flex; gap: 2rem; justify-content: space-around; padding: 1rem;">
+                <div style="text-align: center;">
+                    <div style="font-size: 2rem; font-weight: bold; color: ${improvement.correctnessImprovement > 0 ? 'var(--success)' : 'var(--danger)'}">
+                        ${improvement.correctnessImprovement > 0 ? '↓' : '↑'} ${Math.abs(improvement.correctnessImprovement)}%
+                    </div>
+                    <div style="color: var(--text-muted); font-size: 0.9rem;">Error Rate Change</div>
+                </div>
+                <div style="text-align: center;">
+                    <div style="font-size: 2rem; font-weight: bold; color: var(--success)">
+                        ${improvement.speedImprovement}%
+                    </div>
+                    <div style="color: var(--text-muted); font-size: 0.9rem;">Speed Improvement</div>
+                </div>
+            </div>
+        `;
+    }
+
+    // Pipeline Timing
+    const timing = metricsEngine.getAveragePipelineTiming();
+    const timingSection = document.getElementById('chart-pipeline-timing');
+    if (timing.count > 0) {
+        const total = timing.avgTotalTime || 1;
+        timingSection.innerHTML = `
+            <div style="padding: 1rem;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                    <span>Lexer</span>
+                    <span>${timing.avgLexTime}ms</span>
+                </div>
+                <div style="width: 100%; background: #eee; height: 8px; border-radius: 4px; margin-bottom: 1rem;">
+                    <div style="width: ${(timing.avgLexTime/total)*100}%; background: #3b82f6; height: 100%; border-radius: 4px;"></div>
+                </div>
+                
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                    <span>Parser</span>
+                    <span>${timing.avgParseTime}ms</span>
+                </div>
+                <div style="width: 100%; background: #eee; height: 8px; border-radius: 4px; margin-bottom: 1rem;">
+                    <div style="width: ${(timing.avgParseTime/total)*100}%; background: #8b5cf6; height: 100%; border-radius: 4px;"></div>
+                </div>
+
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                    <span>Semantic Analyzer</span>
+                    <span>${timing.avgSemanticTime}ms</span>
+                </div>
+                <div style="width: 100%; background: #eee; height: 8px; border-radius: 4px; margin-bottom: 1rem;">
+                    <div style="width: ${(timing.avgSemanticTime/total)*100}%; background: #f59e0b; height: 100%; border-radius: 4px;"></div>
+                </div>
+
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                    <span>Code Generator</span>
+                    <span>${timing.avgCodeGenTime}ms</span>
+                </div>
+                <div style="width: 100%; background: #eee; height: 8px; border-radius: 4px; margin-bottom: 1rem;">
+                    <div style="width: ${(timing.avgCodeGenTime/total)*100}%; background: #10b981; height: 100%; border-radius: 4px;"></div>
+                </div>
+            </div>
+        `;
+    }
+}
+
+async function runBenchmarkTest() {
+    if (typeof metricsEngine === 'undefined') return;
+    
+    showToast('Running benchmark tests...', 'info');
+    
+    try {
+        const response = await fetch('dataset.json');
+        if (!response.ok) throw new Error("Could not load dataset.json");
+        const dataset = await response.json();
+        
+        const compiler = new PseudocodeCompiler();
+        const results = metricsEngine.runBenchmark(dataset, compiler);
+        
+        document.getElementById('benchmark-accuracy').textContent = results.accuracy + '%';
+        document.getElementById('benchmark-precision').textContent = results.avgPrecision + '%';
+        document.getElementById('benchmark-recall').textContent = results.avgRecall + '%';
+        document.getElementById('benchmark-f1').textContent = results.f1Score;
+        document.getElementById('benchmark-compile-rate').textContent = results.compilationSuccessRate + '%';
+        document.getElementById('benchmark-avg-time').textContent = results.avgTimeMs + 'ms';
+        
+        const tbody = document.getElementById('benchmark-results-body');
+        tbody.innerHTML = results.results.map(r => \`
+            <tr>
+                <td>\${r.id}</td>
+                <td>\${r.concept}</td>
+                <td><span class="badge \${r.compiled ? 'badge-success' : 'badge-error'}">\${r.compiled ? 'Yes' : 'No'}</span></td>
+                <td><span class="badge \${r.exactMatch ? 'badge-success' : 'badge-error'}">\${r.exactMatch ? 'Yes' : 'No'}</span></td>
+                <td>\${(r.precision * 100).toFixed(1)}%</td>
+                <td>\${(r.recall * 100).toFixed(1)}%</td>
+                <td>\${r.timeMs}ms</td>
+            </tr>
+        \`).join('');
+        
+        showToast('Benchmark complete!', 'success');
+    } catch (e) {
+        console.error(e);
+        showToast('Failed to load dataset for benchmark.', 'error');
+    }
+}

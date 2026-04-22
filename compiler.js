@@ -1056,8 +1056,14 @@ class PseudocodeCompiler {
      *   3. SemanticAnalyzer.analyze() — symbol table + undeclared var checks
      *   4. CodeGenerator.generate()  — SDT tree-walk → Python emission
      */
-    compile(code) {
+    compile(rawCode) {
         const pipelineStart = performance.now();
+
+        // ── Stage 0: Natural Language Mapping ──
+        let code = rawCode;
+        if (typeof nlpMapper !== 'undefined') {
+            code = nlpMapper.map(rawCode);
+        }
 
         // ── Stage 1: Lexical Analysis ──
         const t1 = performance.now();
@@ -1068,13 +1074,13 @@ class PseudocodeCompiler {
         // ── Stage 2: Syntax Analysis (CFG + LIFO stack validation) ──
         const t2 = performance.now();
         const parser = new Parser(tokens);
-        const ast = parser.parse();
+        let ast = parser.parse();
         const parseTime = performance.now() - t2;
 
         // ── Stage 3: Semantic Analysis (pre-execution variable check) ──
         const t3 = performance.now();
         const semanticAnalyzer = new SemanticAnalyzer();
-        const warnings = semanticAnalyzer.analyze(ast);
+        let warnings = semanticAnalyzer.analyze(ast);
         const semanticTime = performance.now() - t3;
 
         // Build pipeline metrics object
@@ -1088,10 +1094,45 @@ class PseudocodeCompiler {
             astNodeCount: ast.body ? ast.body.length : 0
         };
 
-        // Syntax errors are hard stops — no code generation
+        // ── Validation-Driven Refinement (Auto-Fix) ──
+        // If there are errors related to unclosed blocks, try to append the missing closures
+        if (ast.errors.length > 0) {
+            let autoFixedCode = code;
+            let fixesApplied = 0;
+            for (const err of ast.errors) {
+                if (err.message.startsWith('Unclosed') && err.suggestion.startsWith('Add END')) {
+                    const match = err.suggestion.match(/Add (END [A-Z]+)/);
+                    if (match && match[1]) {
+                        autoFixedCode += '\n' + match[1];
+                        fixesApplied++;
+                    }
+                }
+            }
+
+            if (fixesApplied > 0) {
+                // Re-run pipeline with auto-fixed code
+                const retryLexer = new Lexer(autoFixedCode);
+                const retryParser = new Parser(retryLexer.tokenize());
+                const retryAst = retryParser.parse();
+                
+                // If it passes now, accept the fixed AST but add a warning
+                if (retryAst.errors.length === 0) {
+                    ast = retryAst;
+                    const retrySemanticAnalyzer = new SemanticAnalyzer();
+                    warnings = retrySemanticAnalyzer.analyze(ast);
+                    warnings.push({
+                        line: ast.body.length + 1,
+                        message: `Validation-Driven Refinement applied ${fixesApplied} auto-fix(es) to close blocks.`,
+                        suggestion: "Always ensure your BEGIN/END and control blocks are properly closed."
+                    });
+                }
+            }
+        }
+
+        // Syntax errors are hard stops — no code generation (if auto-fix failed)
         if (ast.errors.length > 0) {
             metrics.totalTime = parseFloat((performance.now() - pipelineStart).toFixed(3));
-            return { valid: false, python: '', errors: ast.errors, warnings: warnings, metrics: metrics };
+            return { valid: false, python: '', errors: ast.errors, warnings: warnings, metrics: metrics, mappedCode: code };
         }
 
         // ── Stage 4: Code Generation (SDT tree-walk) ──
@@ -1102,7 +1143,7 @@ class PseudocodeCompiler {
 
         metrics.totalTime = parseFloat((performance.now() - pipelineStart).toFixed(3));
 
-        return { valid: true, python: pythonCode, errors: [], warnings: warnings, metrics: metrics };
+        return { valid: true, python: pythonCode, errors: [], warnings: warnings, metrics: metrics, mappedCode: code };
     }
 
     /**
