@@ -2338,17 +2338,17 @@ async function runBenchmarkTest() {
         document.getElementById('benchmark-avg-time').textContent = results.avgTimeMs + 'ms';
         
         const tbody = document.getElementById('benchmark-results-body');
-        tbody.innerHTML = results.results.map(r => \`
+        tbody.innerHTML = results.results.map(r => `
             <tr>
-                <td>\${r.id}</td>
-                <td>\${r.concept}</td>
-                <td><span class="badge \${r.compiled ? 'badge-success' : 'badge-error'}">\${r.compiled ? 'Yes' : 'No'}</span></td>
-                <td><span class="badge \${r.exactMatch ? 'badge-success' : 'badge-error'}">\${r.exactMatch ? 'Yes' : 'No'}</span></td>
-                <td>\${(r.precision * 100).toFixed(1)}%</td>
-                <td>\${(r.recall * 100).toFixed(1)}%</td>
-                <td>\${r.timeMs}ms</td>
+                <td>${r.id}</td>
+                <td>${r.concept}</td>
+                <td><span class="badge ${r.compiled ? 'badge-success' : 'badge-error'}">${r.compiled ? 'Yes' : 'No'}</span></td>
+                <td><span class="badge ${r.exactMatch ? 'badge-success' : 'badge-error'}">${r.exactMatch ? 'Yes' : 'No'}</span></td>
+                <td>${(r.precision * 100).toFixed(1)}%</td>
+                <td>${(r.recall * 100).toFixed(1)}%</td>
+                <td>${r.timeMs}ms</td>
             </tr>
-        \`).join('');
+        `).join('');
         
         showToast('Benchmark complete!', 'success');
     } catch (e) {
