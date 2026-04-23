@@ -167,10 +167,13 @@
             <span class="nav-icon">▶️</span> Execute Code
           </button>
           <button class="nav-item" onclick="navigateTo('feedback')">
-            <span class="nav-icon">💡</span> Feedback & Suggestions
+            <span class="nav-icon">💡</span> Feedback &amp; Suggestions
           </button>
           <button class="nav-item" onclick="navigateTo('exercises-student')">
-            <span class="nav-icon">📝</span> Exercises & Tasks
+            <span class="nav-icon">📝</span> Exercises &amp; Tasks
+          </button>
+          <button class="nav-item" onclick="navigateTo('change-password')">
+            <span class="nav-icon">🔑</span> Change Password
           </button>
           <button class="nav-item" onclick="navigateTo('student-settings')">
             <span class="nav-icon">⚙️</span> Settings
@@ -188,6 +191,12 @@
           </button>
           <button class="nav-item" onclick="navigateTo('generate-code')">
             <span class="nav-icon">🐍</span> Generate Python Code
+          </button>
+          <button class="nav-item" onclick="navigateTo('compiler-metrics')">
+            <span class="nav-icon">🧪</span> Compiler Metrics
+          </button>
+          <button class="nav-item" onclick="navigateTo('change-password')">
+            <span class="nav-icon">🔑</span> Change Password
           </button>
         </div>
 
@@ -249,8 +258,11 @@
               <h3>📝 Pseudocode Editor <span class="lang-badge pseudo">Pseudocode</span></h3>
             </div>
             <div class="panel-body">
-              <textarea id="pseudocode-editor" class="code-editor" spellcheck="false"
-                placeholder="Write your pseudocode here...&#10;&#10;Example:&#10;BEGIN&#10;  SET x TO 10&#10;  IF x > 5 THEN&#10;    DISPLAY &quot;x is large&quot;&#10;  ELSE&#10;    DISPLAY &quot;x is small&quot;&#10;  END IF&#10;END"></textarea>
+              <div class="editor-with-gutter">
+                <div id="editor-gutter" class="editor-gutter"></div>
+                <textarea id="pseudocode-editor" class="code-editor" spellcheck="false"
+                  placeholder="Write your pseudocode here...&#10;&#10;Example:&#10;BEGIN&#10;  SET x TO 10&#10;  IF x > 5 THEN&#10;    DISPLAY &quot;x is large&quot;&#10;  ELSE&#10;    DISPLAY &quot;x is small&quot;&#10;  END IF&#10;END"></textarea>
+              </div>
             </div>
             <div class="panel-footer">
               <button class="btn btn-primary" style="width:auto" onclick="translatePseudocode()">
@@ -280,8 +292,7 @@
               <button class="btn btn-sm btn-ghost" onclick="copyPython()" title="Copy to clipboard">📋 Copy</button>
             </div>
             <div class="panel-body">
-              <textarea id="python-output" class="code-editor" readonly
-                placeholder="Translated Python code will appear here..."></textarea>
+              <div id="python-output" class="code-editor" style="overflow-y: auto; white-space: pre-wrap;" contenteditable="false" data-placeholder="Translated Python code will appear here..."></div>
             </div>
             <div class="panel-footer">
               <button class="btn btn-success btn-sm" onclick="executePython()">
@@ -319,8 +330,14 @@
         </div>
         <div class="editor-layout" style="height:calc(100vh - 220px)">
           <div class="editor-panel">
-            <div class="panel-header">
-              <h3>📝 Input <span class="lang-badge pseudo">Pseudocode</span></h3>
+            <div class="panel-header" style="justify-content: space-between;">
+              <div style="display:flex; align-items:center;">
+                <h3>📝 Input <span class="lang-badge pseudo">Pseudocode</span></h3>
+              </div>
+              <div>
+                <input type="file" id="upload-translate-file" accept=".txt,.pdf" style="display:none" onchange="handleFileUpload(event, 'translate-input')">
+                <label for="upload-translate-file" class="btn btn-ghost btn-sm" style="cursor:pointer; display:inline-flex; align-items:center; gap:0.35rem; font-weight: 500;"><span style="font-size:1.1rem">📄</span> Upload File</label>
+              </div>
             </div>
             <div class="panel-body">
               <textarea id="translate-input" class="code-editor" spellcheck="false"
@@ -337,8 +354,7 @@
               <h3>🐍 Result <span class="lang-badge python">Python</span></h3>
             </div>
             <div class="panel-body">
-              <textarea id="translate-output" class="code-editor" readonly
-                placeholder="Python code appears here after translation..."></textarea>
+              <div id="translate-output" class="code-editor" style="overflow-y: auto; white-space: pre-wrap;" contenteditable="false" data-placeholder="Python code appears here after translation..."></div>
             </div>
             <div class="panel-footer">
               <button class="btn btn-success btn-sm" onclick="executeFromTranslate()">▶️ Run</button>
@@ -545,8 +561,14 @@
         </div>
         <div class="editor-layout" style="height:calc(100vh - 220px)">
           <div class="editor-panel">
-            <div class="panel-header">
-              <h3>📝 Pseudocode <span class="lang-badge pseudo">Pseudocode</span></h3>
+            <div class="panel-header" style="justify-content: space-between;">
+              <div style="display:flex; align-items:center;">
+                <h3>📝 Pseudocode <span class="lang-badge pseudo">Pseudocode</span></h3>
+              </div>
+              <div>
+                <input type="file" id="upload-instructor-file" accept=".txt,.pdf" style="display:none" onchange="handleFileUpload(event, 'instructor-pseudo-input')">
+                <label for="upload-instructor-file" class="btn btn-ghost btn-sm" style="cursor:pointer; display:inline-flex; align-items:center; gap:0.35rem; font-weight: 500;"><span style="font-size:1.1rem">📄</span> Upload File</label>
+              </div>
             </div>
             <div class="panel-body">
               <textarea id="instructor-pseudo-input" class="code-editor" spellcheck="false"
@@ -562,8 +584,7 @@
               <h3>🐍 Generated Python <span class="lang-badge python">Python</span></h3>
             </div>
             <div class="panel-body">
-              <textarea id="instructor-python-output" class="code-editor" readonly
-                placeholder="Generated Python code..."></textarea>
+              <div id="instructor-python-output" class="code-editor" style="overflow-y: auto; white-space: pre-wrap;" contenteditable="false" data-placeholder="Generated Python code..."></div>
             </div>
             <div class="panel-footer">
               <button class="btn btn-success btn-sm" onclick="instructorExecute()">▶️ Run</button>
@@ -579,6 +600,143 @@
             </div>
             <div id="instructor-console" class="output-content">Waiting for code execution...</div>
           </div>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════
+           PAGE: Compiler Metrics (Instructor)
+           ═══════════════════════════════════ -->
+      <div id="page-compiler-metrics" class="page-view hidden">
+        <div class="page-header">
+          <div>
+            <h2>🧪 Compiler Metrics &amp; Evaluation</h2>
+            <p>Formal evaluation metrics: accuracy, precision/recall, compilation rates, and pipeline performance.</p>
+          </div>
+          <button id="run-benchmark-btn" class="btn btn-primary" style="width:auto" onclick="runBenchmarkTest()">
+            🧪 Run Benchmark
+          </button>
+        </div>
+
+        <!-- Session Metrics -->
+        <div class="stats-grid" style="margin-bottom:1.5rem">
+          <div class="stat-card">
+            <div class="stat-icon">🔄</div>
+            <div class="stat-value" id="metric-total-translations">0</div>
+            <div class="stat-label">Total Translations</div>
+            <div class="stat-change" id="metric-error-trend">— Stable</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon">✅</div>
+            <div class="stat-value" id="metric-compilation-rate">0%</div>
+            <div class="stat-label">Compilation Success Rate</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon">❌</div>
+            <div class="stat-value" id="metric-runtime-error-rate">0%</div>
+            <div class="stat-label">Runtime Error Rate</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon">⏱️</div>
+            <div class="stat-value" id="metric-avg-gen-time">0ms</div>
+            <div class="stat-label">Avg Generation Time</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon">⚠️</div>
+            <div class="stat-value" id="metric-total-errors">0</div>
+            <div class="stat-label">Total Errors</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon">▶️</div>
+            <div class="stat-value" id="metric-total-executions">0</div>
+            <div class="stat-label">Total Executions</div>
+          </div>
+        </div>
+
+        <!-- Improvement Tracking -->
+        <div class="data-table-container" style="margin-bottom:1.5rem">
+          <div class="panel-header">
+            <h3>📈 Improvement Tracking</h3>
+          </div>
+          <div id="metrics-improvement-section" style="padding:1rem;">
+            <div class="empty-state" style="padding: 1.5rem;">
+              <div class="empty-icon">📊</div>
+              <h3>No Improvement Data Yet</h3>
+              <p>Need at least 2 translations to calculate improvement.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Pipeline Timing Chart -->
+        <div class="charts-grid" style="margin-bottom:1.5rem">
+          <div class="chart-container">
+            <div class="panel-header">
+              <h3>⏱️ Pipeline Stage Timing (Avg)</h3>
+            </div>
+            <div id="chart-pipeline-timing" class="chart-body" style="padding-bottom:2.5rem">
+              <div style="text-align:center;color:var(--text-muted);padding:2rem;">No timing data yet. Translate some pseudocode first.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Benchmark Results -->
+        <div class="stats-grid" style="margin-bottom:1.5rem">
+          <div class="stat-card">
+            <div class="stat-icon">🎯</div>
+            <div class="stat-value" id="benchmark-accuracy">—</div>
+            <div class="stat-label">Accuracy</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon">🔍</div>
+            <div class="stat-value" id="benchmark-precision">—</div>
+            <div class="stat-label">Avg Precision</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon">📡</div>
+            <div class="stat-value" id="benchmark-recall">—</div>
+            <div class="stat-label">Avg Recall</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon">📊</div>
+            <div class="stat-value" id="benchmark-f1">—</div>
+            <div class="stat-label">F1 Score</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon">🔧</div>
+            <div class="stat-value" id="benchmark-compile-rate">—</div>
+            <div class="stat-label">Compile Rate</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon">⚡</div>
+            <div class="stat-value" id="benchmark-avg-time">—</div>
+            <div class="stat-label">Avg Time / Test</div>
+          </div>
+        </div>
+
+        <!-- Detailed Benchmark Table -->
+        <div class="data-table-container">
+          <div class="panel-header">
+            <h3>📋 Benchmark Test Results (dataset.json)</h3>
+          </div>
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Concept</th>
+                <th>Compiled</th>
+                <th>Exact Match</th>
+                <th>Precision</th>
+                <th>Recall</th>
+                <th>Time</th>
+              </tr>
+            </thead>
+            <tbody id="benchmark-results-body">
+              <tr>
+                <td colspan="7" style="text-align:center;padding:2rem;color:var(--text-muted)">
+                  Click "Run Benchmark" to test against dataset.json ground truth.
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
 
@@ -628,6 +786,7 @@
               <tr>
                 <th>User</th>
                 <th>Email</th>
+                <th>Password</th>
                 <th>Role</th>
                 <th>Status</th>
                 <th>Actions</th>
@@ -635,6 +794,69 @@
             </thead>
             <tbody id="users-table-body"></tbody>
           </table>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════
+           PAGE: Change Password (Student / Instructor)
+           ═══════════════════════════════════ -->
+      <div id="page-change-password" class="page-view hidden">
+        <div class="page-header">
+          <div>
+            <h2>🔑 Change Password</h2>
+            <p>Update your account password. You must enter your current password for verification.</p>
+          </div>
+        </div>
+
+        <div class="change-password-container">
+          <div class="change-password-card">
+            <div class="form-group">
+              <label>Current Password</label>
+              <div style="position: relative; display: flex; align-items: center;">
+                <input type="password" id="cp-current-password" class="form-input" placeholder="Enter your current password"
+                  style="padding-right: 2.5rem; width: 100%;">
+                <button type="button" class="btn btn-ghost btn-icon"
+                  onclick="togglePasswordVisibility('cp-current-password', this)"
+                  style="position: absolute; right: 0.25rem; background: transparent; border: none; font-size: 1.1rem; opacity: 0.7; cursor: pointer;">
+                  👁️
+                </button>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>New Password</label>
+              <div style="position: relative; display: flex; align-items: center;">
+                <input type="password" id="cp-new-password" class="form-input" placeholder="Minimum 6 characters"
+                  style="padding-right: 2.5rem; width: 100%;">
+                <button type="button" class="btn btn-ghost btn-icon"
+                  onclick="togglePasswordVisibility('cp-new-password', this)"
+                  style="position: absolute; right: 0.25rem; background: transparent; border: none; font-size: 1.1rem; opacity: 0.7; cursor: pointer;">
+                  👁️
+                </button>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Confirm New Password</label>
+              <div style="position: relative; display: flex; align-items: center;">
+                <input type="password" id="cp-confirm-password" class="form-input" placeholder="Re-enter new password"
+                  style="padding-right: 2.5rem; width: 100%;">
+                <button type="button" class="btn btn-ghost btn-icon"
+                  onclick="togglePasswordVisibility('cp-confirm-password', this)"
+                  style="position: absolute; right: 0.25rem; background: transparent; border: none; font-size: 1.1rem; opacity: 0.7; cursor: pointer;">
+                  👁️
+                </button>
+              </div>
+            </div>
+            <div class="cp-requirements">
+              <div class="cp-req-title" style="margin-top: 1rem; font-weight: 600;">Password Requirements:</div>
+              <ul style="margin-top: 0.25rem; margin-bottom: 1rem; padding-left: 1.25rem; font-size: 0.85rem; color: var(--text-muted);">
+                <li>Minimum 6 characters</li>
+                <li>Must not be the same as current password</li>
+              </ul>
+            </div>
+            <button class="btn btn-primary" style="width:auto;" onclick="handleChangePassword()">
+              🔑 Update Password
+            </button>
+          </div>
         </div>
       </div>
 
@@ -871,7 +1093,7 @@
           <label>Email</label>
           <input type="email" id="user-email" class="form-input" placeholder="juan@university.edu.ph">
         </div>
-        <div class="form-group">
+        <div class="form-group" id="user-password-group">
           <label>Password</label>
           <div style="position: relative; display: flex; align-items: center;">
             <input type="password" id="user-password" class="form-input" placeholder="Minimum 6 characters"
@@ -901,25 +1123,28 @@
 
 
 
-  <!-- Firebase Compat SDK (v9 compat mode) -->
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-
-  <!-- Firebase Config & Seed -->
+  <!-- Database Config & Seed (Offline LocalStorage) -->
   <script src="firebase-config.js"></script>
 
   <!-- Skulpt for Python execution -->
   <script src="https://skulpt.org/js/skulpt.min.js" type="text/javascript"></script>
   <script src="https://skulpt.org/js/skulpt-stdlib.js" type="text/javascript"></script>
 
+  <!-- PDF.js for PDF text extraction -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script>pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
+
   <!-- App Logic -->
+  <script src="mapper.js"></script>
+  <script src="compiler.js"></script>
+  <script src="metrics.js"></script>
   <script src="app.js"></script>
 
   <!-- Service Worker Registration -->
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js')
+        navigator.serviceWorker.register('sw.js')
           .then(reg => console.log('[PWA] Service Worker registered:', reg.scope))
           .catch(err => console.warn('[PWA] SW registration failed:', err));
       });
