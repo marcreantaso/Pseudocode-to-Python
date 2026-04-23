@@ -446,6 +446,16 @@
             </div>
           </div>
         </div>
+
+        <!-- Logic Analysis Card -->
+        <div id="logic-analysis-card" class="feedback-container hidden" style="margin-top:1.5rem">
+          <div class="panel-header" style="background: var(--primary); color: white;">
+            <h3>🧠 Structural Logic & Root Cause Analysis</h3>
+          </div>
+          <div id="logic-analysis-results" class="panel-body" style="padding: 1.5rem;">
+            <!-- Results injected by JS -->
+          </div>
+        </div>
       </div>
 
       <!-- ═══════════════════════════════════
@@ -738,6 +748,28 @@
             </tbody>
           </table>
         </div>
+        </div>
+
+        <!-- Concept Mastery Analysis -->
+        <div class="data-table-container" style="margin-top: 1.5rem;">
+          <div class="panel-header">
+            <h3>🎓 Concept Mastery Analytics (Constructivism Model)</h3>
+          </div>
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Learning Concept</th>
+                <th>Success Rate</th>
+                <th>Logic Accuracy</th>
+                <th>Avg Precision</th>
+                <th>Mastery Level</th>
+              </tr>
+            </thead>
+            <tbody id="concept-mastery-body">
+              <tr><td colspan="5" style="text-align:center;padding:1rem;color:var(--text-muted)">Run benchmark to see mastery analytics.</td></tr>
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <!-- ═══════════════════════════════════
@@ -749,9 +781,14 @@
             <h2>👥 Administer User Accounts</h2>
             <p>Create, edit, and manage user accounts and role assignments.</p>
           </div>
-          <button class="btn btn-primary" style="width:auto" onclick="openUserModal()">
-            ➕ Add User
-          </button>
+          <div style="display: flex; gap: 0.5rem;">
+            <button class="btn btn-secondary" style="width:auto" onclick="exportData('users')">
+              📥 Export Users
+            </button>
+            <button class="btn btn-primary" style="width:auto" onclick="openUserModal()">
+              ➕ Add User
+            </button>
+          </div>
         </div>
 
         <div class="stats-grid" style="margin-bottom:1.5rem">

@@ -425,11 +425,98 @@ class MetricsEngine {
     // ══════════════════════════════════════════════════════════════
 
     /**
-     * Get all historical benchmark results for trend display.
-     * @returns {Array} array of benchmark summaries
+     * Compare student pseudocode against instructor solution.
+     * Performs structural logic analysis and identifies "Root Cause" of differences.
+     * @param {string} studentCode — student's pseudocode
+     * @param {string} solutionCode — instructor's ground-truth solution
      */
-    getBenchmarkHistory() {
-        return this.history.benchmarks || [];
+    analyzeLogicGap(studentCode, solutionCode) {
+        if (!solutionCode) return { match: true, reason: "No ground truth provided for this exercise." };
+
+        const studentTokens = this._tokenize(studentCode);
+        const solutionTokens = this._tokenize(solutionCode);
+
+        // 1. Keyword Frequency Analysis (Structural Logic)
+        const studentKeywords = this._getKeywordCounts(studentTokens);
+        const solutionKeywords = this._getKeywordCounts(solutionTokens);
+
+        const gaps = [];
+
+        // Check for missing/extra logic structures
+        const importantKeywords = ['IF', 'WHILE', 'FOR', 'BEGIN', 'END'];
+        for (const kw of importantKeywords) {
+            const studentCount = studentKeywords[kw] || 0;
+            const solutionCount = solutionKeywords[kw] || 0;
+            const diff = studentCount - solutionCount;
+            
+            if (diff < 0) {
+                gaps.push({
+                    type: 'Missing Structure',
+                    concept: kw,
+                    message: `Missing ${Math.abs(diff)} '${kw}' block(s).`,
+                    rootCause: `The instructor's solution uses ${solutionCount} ${kw} structure(s) to handle the problem's logic. Your attempt only uses ${studentCount}.`
+                });
+            } else if (diff > 0) {
+                gaps.push({
+                    type: 'Extra Complexity',
+                    concept: kw,
+                    message: `Redundant '${kw}' block(s) detected.`,
+                    rootCause: `The problem can be solved with only ${solutionCount} ${kw} structure(s). Adding ${diff} extra block(s) increases cognitive load and potential for errors.`
+                });
+            }
+        }
+
+        // 2. Concept Analysis
+        return {
+            match: gaps.length === 0,
+            gaps: gaps,
+            summary: gaps.length === 0 ? "Logical alignment: Excellent" : "Logic Analysis Required"
+        };
+    }
+
+    /**
+     * Aggregate benchmark results by concept to show "Concept Mastery".
+     */
+    getConceptMastery() {
+        if (!this.benchmarkResults) return [];
+        
+        const conceptMap = {};
+        for (const r of this.benchmarkResults.results) {
+            if (!conceptMap[r.concept]) {
+                conceptMap[r.concept] = { concept: r.concept, total: 0, compiled: 0, exact: 0, avgPrecision: 0 };
+            }
+            const c = conceptMap[r.concept];
+            c.total++;
+            if (r.compiled) c.compiled++;
+            if (r.exactMatch) c.exact++;
+            c.avgPrecision += r.precision;
+        }
+
+        return Object.values(conceptMap).map(c => ({
+            ...c,
+            successRate: parseFloat(((c.compiled / c.total) * 100).toFixed(1)),
+            accuracy: parseFloat(((c.exact / c.total) * 100).toFixed(1)),
+            precision: parseFloat(((c.avgPrecision / c.total) * 100).toFixed(1))
+        }));
+    }
+
+    // ── Internal Helpers ──
+
+    _tokenize(code) {
+        // Simple regex-based tokenizer for logic analysis
+        return code.match(/\b[A-Z]+\b|\w+|[^\s\w]/g) || [];
+    }
+
+    _getKeywordCounts(tokens) {
+        const counts = {};
+        const keywords = ['BEGIN', 'END', 'IF', 'THEN', 'ELSE', 'WHILE', 'DO', 'FOR', 'SET', 'INPUT', 'DISPLAY', 'PRINT'];
+        for (const token of tokens) {
+            const upper = token.toUpperCase();
+            if (keywords.includes(upper)) {
+                counts[upper] = (counts[upper] || 0) + 1;
+            }
+        }
+        return counts;
     }
 
     /**
