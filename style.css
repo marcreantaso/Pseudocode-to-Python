@@ -130,6 +130,10 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--text-muted);
 }
+/* ── Utility ── */
+.hidden {
+  display: none !important;
+}
 
 /* ── Typography ── */
 h1,
