@@ -614,11 +614,7 @@ function analyzePseudocode() {
  *   1. AST-Driven Structure Analysis (via Parser)
  *   2. Symbol Table Variable Hygiene (via SemanticAnalyzer)
  *   3. Algorithmic Complexity Feedback (via analyzeComplexity)
- *   4. Pattern Recognition (accumulator, counter, sentinel)
  *   5. Historical Comparison (session improvement metrics)
- *   6. Composite Code Quality Score (0–100)
- *
- * NOT hard-coded. NOT online. Fully dynamic & offline.
  */
 function generateFeedback(pseudocode) {
     const feedback = [];
@@ -671,16 +667,12 @@ function generateFeedback(pseudocode) {
         } else {
             const syntaxErrors = compileResult.errors;
             feedback.push({ type: 'error', icon: '❌', text: `<strong>Syntax Errors:</strong> ${syntaxErrors.length} error(s) detected. Fix these before translation.` });
-            // Show first 3 errors as individual items
             syntaxErrors.slice(0, 3).forEach(err => {
                 feedback.push({
                     type: 'error', icon: '📍',
                     text: `<strong>Line ${err.line}:</strong> ${err.message}${err.suggestion ? ' <em>💡 ' + err.suggestion + '</em>' : ''}`
                 });
             });
-            if (syntaxErrors.length > 3) {
-                feedback.push({ type: 'error', icon: '📋', text: `<em>...and ${syntaxErrors.length - 3} more error(s).</em>` });
-            }
         }
 
         // Warnings from semantic analysis
@@ -708,7 +700,6 @@ function generateFeedback(pseudocode) {
         });
         qualityScore += 5;
 
-        // Check for numeric vs unknown types
         const numericVars = declaredVars.filter(v => {
             const info = symbolTable.get(v);
             return info && info.type === 'numeric';
@@ -728,7 +719,52 @@ function generateFeedback(pseudocode) {
     }
 
     // ──────────────────────────────────────────────
-    // 3. ALGORITHMIC COMPLEXITY ANALYSIS
+    // 3. LOGIC ANALYSIS (Constructivism Model)
+    // ──────────────────────────────────────────────
+    const allEx = typeof cachedExercises !== 'undefined' ? cachedExercises : [];
+    let activeSolution = null;
+    for (const ex of allEx) {
+        if (typeof currentExerciseId !== 'undefined' && ex.id === currentExerciseId) {
+            activeSolution = ex.solution;
+            break;
+        }
+    }
+
+    const logicCard = document.getElementById('logic-analysis-card');
+    const logicResults = document.getElementById('logic-analysis-results');
+
+    if (activeSolution && logicCard && logicResults) {
+        const logicAnalysis = metricsEngine.analyzeLogicGap(pseudocode, activeSolution);
+        logicCard.classList.remove('hidden');
+        
+        let logicHtml = `<p style="margin-bottom: 1rem; font-weight: 500;">${logicAnalysis.summary}</p>`;
+        
+        if (logicAnalysis.gaps.length > 0) {
+            logicHtml += `<div style="display: flex; flex-direction: column; gap: 0.75rem;">`;
+            logicAnalysis.gaps.forEach(gap => {
+                logicHtml += `
+                    <div style="padding: 0.75rem; background: #fff5f5; border-left: 4px solid #f87171; border-radius: 4px;">
+                        <div style="font-weight: 600; color: #991b1b;">[${gap.type}] ${gap.concept || ''}</div>
+                        <div style="font-size: 0.9rem; margin: 0.25rem 0;">${gap.message}</div>
+                        <div style="font-size: 0.85rem; color: #7f1d1d; background: #fee2e2; padding: 0.4rem; border-radius: 3px; margin-top: 0.4rem;">
+                            <strong>Root Cause:</strong> ${gap.rootCause}
+                        </div>
+                    </div>
+                `;
+            });
+            logicHtml += `</div>`;
+        } else {
+            logicHtml += `<div style="padding: 1rem; background: #ecfdf5; color: #065f46; border-radius: 4px; border-left: 4px solid #10b981;">
+                ✅ Your logic matches the structural patterns required for this problem. You have correctly applied the necessary control structures.
+            </div>`;
+        }
+        logicResults.innerHTML = logicHtml;
+    } else if (logicCard) {
+        logicCard.classList.add('hidden');
+    }
+
+    // ──────────────────────────────────────────────
+    // 4. ALGORITHMIC COMPLEXITY ANALYSIS
     // ──────────────────────────────────────────────
     try {
         const complexity = compilerEngine.analyzeComplexity(pseudocode);
@@ -748,7 +784,7 @@ function generateFeedback(pseudocode) {
     } catch (e) { /* skip complexity if analysis fails */ }
 
     // ──────────────────────────────────────────────
-    // 4. PATTERN RECOGNITION (Algorithmic Patterns)
+    // 5. PATTERN RECOGNITION (Algorithmic Patterns)
     // ──────────────────────────────────────────────
     const patterns = detectAlgorithmicPatterns(pseudocode, ast);
     patterns.forEach(p => {
@@ -757,7 +793,7 @@ function generateFeedback(pseudocode) {
     });
 
     // ──────────────────────────────────────────────
-    // 5. CODE STYLE ANALYSIS
+    // 6. CODE STYLE ANALYSIS
     // ──────────────────────────────────────────────
     const indentedLines = lines.filter(l => l.match(/^\s+/));
     if (indentedLines.length > 0) {
@@ -782,7 +818,7 @@ function generateFeedback(pseudocode) {
     }
 
     // ──────────────────────────────────────────────
-    // 6. PIPELINE PERFORMANCE (Execution Time)
+    // 7. PIPELINE PERFORMANCE (Execution Time)
     // ──────────────────────────────────────────────
     if (compileResult && compileResult.metrics) {
         const m = compileResult.metrics;
@@ -794,7 +830,7 @@ function generateFeedback(pseudocode) {
     }
 
     // ──────────────────────────────────────────────
-    // 7. HISTORICAL IMPROVEMENT (Session Comparison)
+    // 8. HISTORICAL IMPROVEMENT (Session Comparison)
     // ──────────────────────────────────────────────
     if (typeof metricsEngine !== 'undefined') {
         const improvement = metricsEngine.getImprovementMetrics();
@@ -819,13 +855,16 @@ function generateFeedback(pseudocode) {
     }
 
     // ──────────────────────────────────────────────
-    // 8. COMPOSITE QUALITY SCORE
+    // 9. FINAL QUALITY SUMMARY
     // ──────────────────────────────────────────────
     qualityScore = Math.min(qualityScore, 100);
-    let quality, qualityType;
-    if (qualityScore >= 80) { quality = 'Excellent'; qualityType = 'success'; }
-    else if (qualityScore >= 60) { quality = 'Good'; qualityType = 'success'; }
-    else if (qualityScore >= 40) { quality = 'Fair'; qualityType = 'warning'; }
+    let quality = 'Excellent';
+    let qualityType = 'success';
+
+    if (qualityScore >= 90) quality = 'Excellent';
+    else if (qualityScore >= 75) quality = 'Very Good';
+    else if (qualityScore >= 60) quality = 'Good';
+    else if (qualityScore >= 40) { quality = 'Average'; qualityType = 'warning'; }
     else { quality = 'Needs Improvement'; qualityType = 'error'; }
 
     const errors = feedback.filter(f => f.type === 'error').length;
@@ -2350,10 +2389,46 @@ async function runBenchmarkTest() {
                 <td>${r.timeMs}ms</td>
             </tr>
         `).join('');
+
+        // Render Concept Mastery
+        const mastery = metricsEngine.getConceptMastery();
+        const masteryBody = document.getElementById('concept-mastery-body');
+        masteryBody.innerHTML = mastery.map(m => {
+            let level = 'Beginner';
+            if (m.successRate > 90 && m.accuracy > 80) level = 'Expert';
+            else if (m.successRate > 70) level = 'Intermediate';
+
+            return `
+                <tr>
+                    <td style="font-weight:600">${m.concept}</td>
+                    <td>${m.successRate}%</td>
+                    <td>${m.accuracy}%</td>
+                    <td>${m.precision}%</td>
+                    <td><span class="badge ${level === 'Expert' ? 'badge-success' : (level === 'Intermediate' ? 'badge-info' : 'badge-warning')}">${level}</span></td>
+                </tr>
+            `;
+        }).join('');
         
         showToast('Benchmark complete!', 'success');
     } catch (e) {
         console.error(e);
         showToast('Failed to execute benchmark.', 'error');
     }
+}
+
+// ── Data Management ──
+function exportData(type) {
+    const data = localStorage.getItem('pseudopy_' + type);
+    if (!data) return showToast('No data to export.', 'warning');
+    
+    const blob = new Blob([data], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `pseudopy_${type}_export_${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('Data exported successfully!', 'success');
 }
