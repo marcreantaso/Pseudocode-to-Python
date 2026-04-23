@@ -241,7 +241,10 @@
         <div class="topbar-title" id="topbar-title">Write Pseudocode</div>
       </div>
       <div class="topbar-actions">
-        <span style="font-size:0.8rem;color:var(--text-muted)" id="topbar-time"></span>
+        <button class="btn btn-ghost btn-icon" id="theme-toggle-btn" onclick="toggleTheme()" title="Toggle Dark/Light Mode">
+          🌓
+        </button>
+        <span style="font-size:0.8rem;color:var(--text-muted);margin-left:0.5rem" id="topbar-time"></span>
       </div>
     </div>
 
@@ -277,6 +280,10 @@
               </button>
               <button class="btn btn-secondary btn-sm" onclick="savePseudocodeAsFile()">
                 💾 Save as File
+              </button>
+              
+              <button class="btn btn-ghost btn-sm" onclick="autoFormatPseudocode()" title="Auto-Format Pseudocode (Fix Indentation)">
+                🪄 Format
               </button>
 
               <input type="file" id="pseudocode-file-input" accept=".txt,.pseudo,.ps,.text" style="display:none"
@@ -720,34 +727,6 @@
             <div class="stat-value" id="benchmark-avg-time">—</div>
             <div class="stat-label">Avg Time / Test</div>
           </div>
-        </div>
-
-        <!-- Detailed Benchmark Table -->
-        <div class="data-table-container">
-          <div class="panel-header">
-            <h3>📋 Benchmark Test Results (dataset.json)</h3>
-          </div>
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Concept</th>
-                <th>Compiled</th>
-                <th>Exact Match</th>
-                <th>Precision</th>
-                <th>Recall</th>
-                <th>Time</th>
-              </tr>
-            </thead>
-            <tbody id="benchmark-results-body">
-              <tr>
-                <td colspan="7" style="text-align:center;padding:2rem;color:var(--text-muted)">
-                  Click "Run Benchmark" to test against dataset.json ground truth.
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
         </div>
 
         <!-- Concept Mastery Analysis -->
