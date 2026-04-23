@@ -3,7 +3,7 @@
    Offline-first caching strategy
    ============================================================ */
 
-const CACHE_NAME = 'pseudopy-v13';
+const CACHE_NAME = 'pseudopy-v14';
 const ASSETS_TO_CACHE = [
     '/',
     '/index.html',
@@ -11,8 +11,8 @@ const ASSETS_TO_CACHE = [
     '/mapper.js',
     '/app.js',
     '/compiler.js',
+    '/dataset.js',
     '/metrics.js',
-    '/dataset.json',
     '/manifest.json',
     '/firebase-config.js',
 

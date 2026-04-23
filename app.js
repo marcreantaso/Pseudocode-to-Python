@@ -2323,12 +2323,13 @@ async function runBenchmarkTest() {
     showToast('Running benchmark tests...', 'info');
     
     try {
-        const response = await fetch('dataset.json');
-        if (!response.ok) throw new Error("Could not load dataset.json");
-        const dataset = await response.json();
+        // Use global constant from dataset.js instead of fetch() to avoid CORS/offline issues
+        if (typeof GROUND_TRUTH_DATASET === 'undefined') {
+            throw new Error("GROUND_TRUTH_DATASET not loaded.");
+        }
         
         const compiler = new PseudocodeCompiler();
-        const results = metricsEngine.runBenchmark(dataset, compiler);
+        const results = metricsEngine.runBenchmark(GROUND_TRUTH_DATASET, compiler);
         
         document.getElementById('benchmark-accuracy').textContent = results.accuracy + '%';
         document.getElementById('benchmark-precision').textContent = results.avgPrecision + '%';
@@ -2353,6 +2354,6 @@ async function runBenchmarkTest() {
         showToast('Benchmark complete!', 'success');
     } catch (e) {
         console.error(e);
-        showToast('Failed to load dataset for benchmark.', 'error');
+        showToast('Failed to execute benchmark.', 'error');
     }
 }
