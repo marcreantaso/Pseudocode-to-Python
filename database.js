@@ -1,6 +1,6 @@
 // ============================================================
-// LOCAL STORAGE CONFIGURATION — PseudoPy
-// Offline persistence to replace Firebase
+// LOCAL STORAGE DATABASE — PseudoPy
+// Offline persistence using browser LocalStorage
 // ============================================================
 
 console.log('[Database] Initialized with LocalStorage (Offline Mode)');
@@ -29,7 +29,7 @@ function saveCollection(ref, dataObj) {
 /**
  * Get all documents from a collection
  */
-async function fbGetAll(ref) {
+async function dbGetAll(ref) {
     const col = getCollection(ref);
     return Object.keys(col).map(id => ({ _docId: id, ...col[id] }));
 }
@@ -37,7 +37,7 @@ async function fbGetAll(ref) {
 /**
  * Add a new document (auto-generated ID)
  */
-async function fbAdd(ref, data) {
+async function dbAdd(ref, data) {
     const col = getCollection(ref);
     const docId = 'doc_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
     col[docId] = data;
@@ -48,7 +48,7 @@ async function fbAdd(ref, data) {
 /**
  * Set a document with a specific ID
  */
-async function fbSet(ref, docId, data) {
+async function dbSet(ref, docId, data) {
     const col = getCollection(ref);
     col[docId] = data;
     saveCollection(ref, col);
@@ -57,7 +57,7 @@ async function fbSet(ref, docId, data) {
 /**
  * Update specific fields on an existing document
  */
-async function fbUpdate(ref, docId, data) {
+async function dbUpdate(ref, docId, data) {
     const col = getCollection(ref);
     if (col[docId]) {
         col[docId] = { ...col[docId], ...data };
@@ -68,7 +68,7 @@ async function fbUpdate(ref, docId, data) {
 /**
  * Delete a document by its ID
  */
-async function fbDelete(ref, docId) {
+async function dbDelete(ref, docId) {
     const col = getCollection(ref);
     if (col[docId]) {
         delete col[docId];
@@ -140,21 +140,21 @@ async function seedDatabase() {
         const existingUsers = getCollection(usersRef);
         if (Object.keys(existingUsers).length === 0) {
             console.log('[Database] Seeding users...');
-            for (const user of SEED_USERS) await fbSet(usersRef, user.id, user);
+            for (const user of SEED_USERS) await dbSet(usersRef, user.id, user);
             console.log('[Database] Users seeded ✅');
         }
 
         const existingExercises = getCollection(exercisesRef);
         if (Object.keys(existingExercises).length === 0) {
             console.log('[Database] Seeding exercises...');
-            for (const ex of SEED_EXERCISES) await fbSet(exercisesRef, ex.id, ex);
+            for (const ex of SEED_EXERCISES) await dbSet(exercisesRef, ex.id, ex);
             console.log('[Database] Exercises seeded ✅');
         }
 
         const existingActivity = getCollection(activityRef);
         if (Object.keys(existingActivity).length === 0) {
             console.log('[Database] Seeding activity...');
-            for (const act of SEED_ACTIVITY) await fbAdd(activityRef, act);
+            for (const act of SEED_ACTIVITY) await dbAdd(activityRef, act);
             console.log('[Database] Activity seeded ✅');
         }
 

@@ -3,7 +3,7 @@
    Offline-first caching strategy
    ============================================================ */
 
-const CACHE_NAME = 'pseudopy-v14';
+const CACHE_NAME = 'pseudopy-v15';
 const ASSETS_TO_CACHE = [
     '/',
     '/index.html',
@@ -14,7 +14,7 @@ const ASSETS_TO_CACHE = [
     '/dataset.js',
     '/metrics.js',
     '/manifest.json',
-    '/firebase-config.js',
+    '/database.js',
 
     'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap',
     'https://skulpt.org/js/skulpt.min.js',
