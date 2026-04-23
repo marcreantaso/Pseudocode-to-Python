@@ -1,7 +1,7 @@
 /* ============================================================
    PSEUDOPY — APP.JS
    Automated Code Generation System
-   Powered by Firebase Firestore
+   Powered by Offline LocalStorage Database
    ============================================================ */
 
 console.log('[App] app.js script is parsing and executing top-level');
@@ -13,7 +13,7 @@ let editingExerciseId = null;
 let editingUserId = null;
 let currentErrorLineNumber = null;
 
-// ── Cached data (loaded from Firestore) ──
+// ── Cached data (loaded from Offline Database) ──
 let cachedUsers = [];
 let cachedExercises = [];
 let cachedActivity = [];
@@ -33,15 +33,15 @@ async function init() {
         await seedDatabase();
         console.log('[App] seedDatabase() finished.');
 
-        // Pre-load data from Firestore into cache
-        cachedUsers = await fbGetAll(usersRef);
-        cachedExercises = await fbGetAll(exercisesRef);
-        cachedActivity = await fbGetAll(activityRef);
+        // Pre-load data from Offline Database into cache
+        cachedUsers = await dbGetAll(usersRef);
+        cachedExercises = await dbGetAll(exercisesRef);
+        cachedActivity = await dbGetAll(activityRef);
 
-        console.log(`[App] Loaded ${cachedUsers.length} users, ${cachedExercises.length} exercises, ${cachedActivity.length} activity records from Firestore.`);
+        console.log(`[App] Loaded ${cachedUsers.length} users, ${cachedExercises.length} exercises, ${cachedActivity.length} activity records from Offline Database.`);
     } catch (err) {
         console.error('[App] Init error:', err);
-        showToast('Database connection failed. Check Firebase config.', 'error');
+        showToast('Database initialization failed. Check local storage availability.', 'error');
     }
 
     updateClock();
@@ -84,17 +84,17 @@ function updateClock() {
    ============================================================ */
 
 async function refreshUsers() {
-    cachedUsers = await fbGetAll(usersRef);
+    cachedUsers = await dbGetAll(usersRef);
     return cachedUsers;
 }
 
 async function refreshExercises() {
-    cachedExercises = await fbGetAll(exercisesRef);
+    cachedExercises = await dbGetAll(exercisesRef);
     return cachedExercises;
 }
 
 async function refreshActivity() {
-    cachedActivity = await fbGetAll(activityRef);
+    cachedActivity = await dbGetAll(activityRef);
     return cachedActivity;
 }
 
@@ -138,7 +138,7 @@ async function handleLogin() {
     }
 
     try {
-        // Refresh users from Firestore
+        // Refresh users from Offline Database
         await refreshUsers();
 
         console.log(`[Debug] Attempting login with: username='${username}', password='${password}', role='${role}'`);
@@ -893,7 +893,7 @@ function renderFeedback(feedback) {
 
 
 /* ============================================================
-   EXERCISES MANAGEMENT — Firestore CRUD
+   EXERCISES MANAGEMENT — Offline Database CRUD
    ============================================================ */
 
 async function loadExercises() {
@@ -994,11 +994,11 @@ async function saveExercise() {
     try {
         if (editingExerciseId) {
             const ex = cachedExercises.find(e => e.id === editingExerciseId);
-            if (ex) await fbUpdate(exercisesRef, ex._docId, { title, description: desc, difficulty, solution });
+            if (ex) await dbUpdate(exercisesRef, ex._docId, { title, description: desc, difficulty, solution });
             showToast('Exercise updated successfully!', 'success');
         } else {
             const newId = 'ex' + Date.now();
-            await fbSet(exercisesRef, newId, {
+            await dbSet(exercisesRef, newId, {
                 id: newId, title, description: desc, difficulty, solution,
                 createdBy: currentUser?.id || 'unknown',
                 createdAt: new Date().toISOString().split('T')[0]
@@ -1008,7 +1008,7 @@ async function saveExercise() {
         closeExerciseModal();
         await loadExercises();
     } catch (err) {
-        console.error('[Firestore] Save exercise error:', err);
+        console.error('[Offline Database] Save exercise error:', err);
         showToast('Failed to save exercise.', 'error');
     }
 }
@@ -1019,18 +1019,18 @@ async function deleteExercise(id) {
     if (!confirm('Delete this exercise?')) return;
     try {
         const ex = cachedExercises.find(e => e.id === id);
-        if (ex) await fbDelete(exercisesRef, ex._docId);
+        if (ex) await dbDelete(exercisesRef, ex._docId);
         await loadExercises();
         showToast('Exercise deleted.', 'info');
     } catch (err) {
-        console.error('[Firestore] Delete exercise error:', err);
+        console.error('[Offline Database] Delete exercise error:', err);
         showToast('Failed to delete exercise.', 'error');
     }
 }
 
 
 /* ============================================================
-   USER MANAGEMENT (Admin) — Firestore CRUD
+   USER MANAGEMENT (Admin) — Offline Database CRUD
    ============================================================ */
 
 async function loadUsers() {
@@ -1115,17 +1115,17 @@ async function saveUser() {
 
         if (editingUserId) {
             const user = users.find(u => u.id === editingUserId);
-            if (user) await fbUpdate(usersRef, user._docId, { fullName, username, email, role });
+            if (user) await dbUpdate(usersRef, user._docId, { fullName, username, email, role });
             showToast('User updated successfully!', 'success');
         } else {
             const newId = 'u' + Date.now();
-            await fbSet(usersRef, newId, { id: newId, fullName, username, email, password, role, status: 'active' });
+            await dbSet(usersRef, newId, { id: newId, fullName, username, email, password, role, status: 'active' });
             showToast('User created successfully!', 'success');
         }
         closeUserModal();
         await loadUsers();
     } catch (err) {
-        console.error('[Firestore] Save user error:', err);
+        console.error('[Offline Database] Save user error:', err);
         showToast('Failed to save user.', 'error');
     }
 }
@@ -1137,11 +1137,11 @@ async function deleteUser(id) {
     if (id === currentUser?.id) { showToast('You cannot delete your own account!', 'error'); return; }
     try {
         const user = cachedUsers.find(u => u.id === id);
-        if (user) await fbDelete(usersRef, user._docId);
+        if (user) await dbDelete(usersRef, user._docId);
         await loadUsers();
         showToast('User deleted.', 'info');
     } catch (err) {
-        console.error('[Firestore] Delete user error:', err);
+        console.error('[Offline Database] Delete user error:', err);
         showToast('Failed to delete user.', 'error');
     }
 }
@@ -1202,7 +1202,7 @@ async function renderActivityTable() {
 let cachedPasswordHistory = [];
 
 async function refreshPasswordHistory() {
-    cachedPasswordHistory = await fbGetAll(passwordRequestsRef);
+    cachedPasswordHistory = await dbGetAll(passwordRequestsRef);
     return cachedPasswordHistory;
 }
 
@@ -1308,11 +1308,11 @@ async function submitPasswordChangeRequest() {
     }
 
     try {
-        // Update the password directly in Firestore
+        // Update the password directly in Offline Database
         const users = cachedUsers.length ? cachedUsers : await refreshUsers();
         const user = users.find(u => u.id === currentUser.id);
         if (user) {
-            await fbUpdate(usersRef, user._docId, {
+            await dbUpdate(usersRef, user._docId, {
                 password: newPassword,
                 lastPasswordChange: new Date().toISOString().split('T')[0]
             });
@@ -1323,7 +1323,7 @@ async function submitPasswordChangeRequest() {
 
         // Log the password change for admin history
         const logId = 'pc' + Date.now();
-        await fbSet(passwordRequestsRef, logId, {
+        await dbSet(passwordRequestsRef, logId, {
             id: logId,
             userId: currentUser.id,
             username: currentUser.username,
@@ -1338,7 +1338,7 @@ async function submitPasswordChangeRequest() {
         showToast('Password changed successfully! Use your new password next time you log in.', 'success');
         await loadStudentSettings();
     } catch (err) {
-        console.error('[Firestore] Change password error:', err);
+        console.error('[Offline Database] Change password error:', err);
         showToast('Failed to change password. Please try again.', 'error');
     }
 }
@@ -2190,7 +2190,7 @@ async function handleChangePassword() {
     }
 
     try {
-        await fbUpdate(usersRef, currentUser._docId, { password: newParam });
+        await dbUpdate(usersRef, currentUser._docId, { password: newParam });
         currentUser.password = newParam; // Update local state immediately
 
         // Update cached array so it's fresh
@@ -2204,7 +2204,7 @@ async function handleChangePassword() {
         document.getElementById('cp-new-password').value = '';
         document.getElementById('cp-confirm-password').value = '';
     } catch (err) {
-        console.error('[Firestore] Change password error:', err);
+        console.error('[Offline Database] Change password error:', err);
         showToast('Failed to update password.', 'error');
     }
 }
