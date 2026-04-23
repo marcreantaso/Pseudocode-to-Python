@@ -74,3 +74,10 @@ self.addEventListener('fetch', (event) => {
         })
     );
 });
+
+// Listen for the skipWaiting message from the UI
+self.addEventListener('message', (event) => {
+    if (event.data && event.data.type === 'SKIP_WAITING') {
+        self.skipWaiting();
+    }
+});

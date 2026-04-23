@@ -1145,9 +1145,31 @@
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js')
-          .then(reg => console.log('[PWA] Service Worker registered:', reg.scope))
-          .catch(err => console.warn('[PWA] SW registration failed:', err));
+        navigator.serviceWorker.register('sw.js').then(reg => {
+          console.log('[PWA] Service Worker registered:', reg.scope);
+
+          // Check for updates
+          reg.onupdatefound = () => {
+            const installingWorker = reg.installing;
+            installingWorker.onstatechange = () => {
+              if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                // New update available! Show notification
+                if (confirm('A new version of PseudoPy is available. Update now?')) {
+                  installingWorker.postMessage({ type: 'SKIP_WAITING' });
+                }
+              }
+            };
+          };
+        }).catch(err => console.warn('[PWA] SW registration failed:', err));
+      });
+
+      // Reload when the new service worker takes over
+      let refreshing = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (!refreshing) {
+          window.location.reload();
+          refreshing = true;
+        }
       });
     }
   </script>
