@@ -39,6 +39,10 @@ async function init() {
         cachedActivity = await dbGetAll(activityRef);
 
         console.log(`[App] Loaded ${cachedUsers.length} users, ${cachedExercises.length} exercises, ${cachedActivity.length} activity records from Offline Database.`);
+        
+        // Initialize Theme from Storage
+        const savedTheme = localStorage.getItem('pseudopy_theme') || 'dark';
+        document.documentElement.setAttribute('data-theme', savedTheme);
     } catch (err) {
         console.error('[App] Init error:', err);
         showToast('Database initialization failed. Check local storage availability.', 'error');
@@ -2377,18 +2381,9 @@ async function runBenchmarkTest() {
         document.getElementById('benchmark-compile-rate').textContent = results.compilationSuccessRate + '%';
         document.getElementById('benchmark-avg-time').textContent = results.avgTimeMs + 'ms';
         
-        const tbody = document.getElementById('benchmark-results-body');
-        tbody.innerHTML = results.results.map(r => `
-            <tr>
-                <td>${r.id}</td>
-                <td>${r.concept}</td>
-                <td><span class="badge ${r.compiled ? 'badge-success' : 'badge-error'}">${r.compiled ? 'Yes' : 'No'}</span></td>
-                <td><span class="badge ${r.exactMatch ? 'badge-success' : 'badge-error'}">${r.exactMatch ? 'Yes' : 'No'}</span></td>
-                <td>${(r.precision * 100).toFixed(1)}%</td>
-                <td>${(r.recall * 100).toFixed(1)}%</td>
-                <td>${r.timeMs}ms</td>
-            </tr>
-        `).join('');
+        // Detailed per-test results hidden to optimize UI for learning analytics
+        // (Mastery aggregation below provides more academic value)
+
 
         // Render Concept Mastery
         const mastery = metricsEngine.getConceptMastery();
@@ -2431,4 +2426,61 @@ function exportData(type) {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
     showToast('Data exported successfully!', 'success');
+}
+
+/* ============================================================
+   UI ENHANCEMENTS: THEME & FORMATTER
+   ============================================================ */
+
+/**
+ * Toggles between Light and Dark mode
+ */
+function toggleTheme() {
+    const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
+    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    
+    document.documentElement.setAttribute('data-theme', newTheme);
+    localStorage.setItem('pseudopy_theme', newTheme);
+    
+    const icon = newTheme === 'dark' ? '🌓' : '☀️';
+    showToast(`Switched to ${newTheme} mode`, 'info');
+}
+
+/**
+ * Automatically formats pseudocode with consistent indentation
+ */
+function autoFormatPseudocode() {
+    const editor = document.getElementById('pseudocode-editor');
+    if (!editor) return;
+
+    const lines = editor.value.split('\n');
+    let indentLevel = 0;
+    const indentSize = 2; // Spaces per level
+
+    const formattedLines = lines.map(line => {
+        let trimmed = line.trim();
+        if (!trimmed) return '';
+
+        // Keywords that decrease indentation BEFORE the line
+        if (trimmed.match(/^(END|ELSE|NEXT|UNTIL)/i)) {
+            indentLevel = Math.max(0, indentLevel - 1);
+        }
+
+        const spaces = ' '.repeat(indentLevel * indentSize);
+        const result = spaces + trimmed;
+
+        // Keywords that increase indentation AFTER the line
+        if (trimmed.match(/^(BEGIN|IF|WHILE|FOR|REPEAT|ELSE|FUNCTION|PROCEDURE|CASE)/i)) {
+            // But don't increase if it's an inline IF or a single-line block
+            if (!trimmed.match(/THEN.*END\s+IF/i) && !trimmed.match(/DO.*DONE/i)) {
+                indentLevel++;
+            }
+        }
+
+        return result;
+    });
+
+    editor.value = formattedLines.join('\n');
+    updateGutter(); // Refresh line numbers
+    showToast('Pseudocode formatted!', 'success');
 }
