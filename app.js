@@ -11,7 +11,7 @@ let currentUser = null;
 let currentPage = '';
 let editingExerciseId = null;
 let editingUserId = null;
-let currentErrorLineNumber = null;
+let currentErrorLineNumbers = [];
 
 // ── Cached data (loaded from Offline Database) ──
 let cachedUsers = [];
@@ -273,7 +273,7 @@ function translatePseudocode() {
         // Clear the python output area
         document.getElementById('python-output').textContent = '';
 
-        currentErrorLineNumber = validation.errors[0].line;
+        currentErrorLineNumbers = validation.errors.map(err => err.line);
         output.className = 'output-content error';
         output.innerHTML = renderHtmlErrors(validation.errors);
 
@@ -283,7 +283,7 @@ function translatePseudocode() {
         return;
     }
 
-    currentErrorLineNumber = null;
+    currentErrorLineNumbers = [];
     updateGutter();
     const python = pseudocodeToPython(input);
     document.getElementById('python-output').textContent = python;
@@ -1489,7 +1489,7 @@ function clearEditor() {
     document.getElementById('console-output').textContent = 'Editor cleared. Ready for new pseudocode.';
     document.getElementById('console-output').className = 'output-content';
     document.getElementById('line-count').textContent = '0 lines';
-    currentErrorLineNumber = null;
+    currentErrorLineNumbers = [];
     updateGutter();
 }
 
@@ -1549,9 +1549,9 @@ function downloadPython() {
  */
 const KNOWN_KEYWORDS = [
     'BEGIN', 'END', 'SET', 'TO', 'DISPLAY', 'PRINT', 'OUTPUT',
-    'IF', 'THEN', 'ELSE', 'END IF',
-    'FOR', 'EACH', 'IN', 'DO', 'FROM', 'TO', 'END FOR',
-    'WHILE', 'END WHILE',
+    'IF', 'THEN', 'ELSE', 'END IF', 'ENDIF',
+    'FOR', 'EACH', 'IN', 'DO', 'FROM', 'TO', 'END FOR', 'ENDFOR',
+    'WHILE', 'END WHILE', 'ENDWHILE',
     'FUNCTION', 'PROCEDURE', 'RETURN', 'CALL', 'END FUNCTION', 'END PROCEDURE',
     'INPUT', 'READ', 'WITH', 'PROMPT',
     'INCREMENT', 'DECREMENT', 'APPEND',
@@ -1589,7 +1589,8 @@ function suggestKeyword(word) {
     const upper = word.toUpperCase();
     const displayKeywords = ['DISPLAY', 'PRINT', 'OUTPUT', 'SET', 'IF', 'ELSE', 'FOR', 'WHILE',
         'BEGIN', 'END', 'THEN', 'DO', 'EACH', 'FROM', 'RETURN', 'CALL',
-        'FUNCTION', 'PROCEDURE', 'INPUT', 'READ', 'INCREMENT', 'DECREMENT', 'APPEND', 'DECLARE'];
+        'FUNCTION', 'PROCEDURE', 'INPUT', 'READ', 'INCREMENT', 'DECREMENT', 'APPEND', 'DECLARE',
+        'ENDIF', 'ENDFOR', 'ENDWHILE'];
 
     let bestMatch = null;
     let bestDist = Infinity;
@@ -1694,16 +1695,21 @@ function validatePseudocode(code) {
         if (lineNum < beginLineNum || lineNum > endLineNum) continue;
 
         // Block closers
-        const endBlockMatch = trimmed.match(/^END\s+(IF|FOR|WHILE|FUNCTION|PROCEDURE)$/i);
+        const endBlockMatch = trimmed.match(/^END\s+(IF|FOR|WHILE|FUNCTION|PROCEDURE)$/i) || trimmed.match(/^(ENDIF|ENDFOR|ENDWHILE)$/i);
         if (endBlockMatch) {
-            const closer = endBlockMatch[1].toUpperCase();
+            let rawCloser = (endBlockMatch[1] || endBlockMatch[0]).toUpperCase();
+            let closer = rawCloser;
+            if (rawCloser === 'ENDIF') closer = 'IF';
+            else if (rawCloser === 'ENDFOR') closer = 'FOR';
+            else if (rawCloser === 'ENDWHILE') closer = 'WHILE';
+
             if (blockStack.length === 0) {
-                errors.push({ line: lineNum, message: `Unexpected END ${closer} — no matching opening block found.`, suggestion: `Remove this END ${closer} or add the matching ${closer} block above.` });
+                errors.push({ line: lineNum, message: `Unexpected ${rawCloser} — no matching opening block found.`, suggestion: `Remove this ${rawCloser} or add the matching block above.` });
             } else {
                 const top = blockStack[blockStack.length - 1];
                 if (top.type === closer) { blockStack.pop(); }
                 else {
-                    errors.push({ line: lineNum, message: `Mismatched block: Expected END ${top.type} (opened on line ${top.line}) but found END ${closer}.`, suggestion: `Close the ${top.type} block with END ${top.type} before END ${closer}.` });
+                    errors.push({ line: lineNum, message: `Mismatched block: Expected END ${top.type} (opened on line ${top.line}) but found ${rawCloser}.`, suggestion: `Close the ${top.type} block with END ${top.type} before ${rawCloser}.` });
                     const deeper = blockStack.findIndex(b => b.type === closer);
                     if (deeper !== -1) {
                         for (let k = blockStack.length - 1; k > deeper; k--) {
@@ -1717,10 +1723,19 @@ function validatePseudocode(code) {
         }
 
         // Block openers
-        if (/^IF\s+(.+)\s+THEN$/i.test(trimmed) || /^ELSE\s+IF\s+(.+)\s+THEN$/i.test(trimmed)) {
-            if (/^IF\s+(.+)\s+THEN$/i.test(trimmed)) blockStack.push({ type: 'IF', line: lineNum });
-            const condMatch = trimmed.match(/^(?:ELSE\s+)?IF\s+(.+)\s+THEN$/i);
+        if (/^IF\s+(.+)\s+THEN$/i.test(trimmed)) {
+            blockStack.push({ type: 'IF', line: lineNum });
+            const condMatch = trimmed.match(/^IF\s+(.+)\s+THEN$/i);
             if (condMatch && !condMatch[1].trim()) errors.push({ line: lineNum, message: 'IF statement has an empty condition.', suggestion: 'Add a condition, e.g. IF x > 5 THEN' });
+            checkIncompleteExpression(trimmed, lineNum, errors);
+            continue;
+        }
+        if (/^ELSE\s+IF\s+(.+)\s+THEN$/i.test(trimmed)) {
+            if (blockStack.length === 0 || blockStack[blockStack.length - 1].type !== 'IF') {
+                errors.push({ line: lineNum, message: 'ELSE IF without a matching IF block.', suggestion: 'Make sure ELSE IF is inside an IF...END IF block.' });
+            }
+            const condMatch = trimmed.match(/^ELSE\s+IF\s+(.+)\s+THEN$/i);
+            if (condMatch && !condMatch[1].trim()) errors.push({ line: lineNum, message: 'ELSE IF statement has an empty condition.', suggestion: 'Add a condition, e.g. ELSE IF x > 5 THEN' });
             checkIncompleteExpression(trimmed, lineNum, errors);
             continue;
         }
@@ -1860,7 +1875,7 @@ function updateGutter() {
 
     let html = '';
     for (let i = 1; i <= linesCount; i++) {
-        const errorClass = (i === currentErrorLineNumber) ? ' error-line' : '';
+        const errorClass = currentErrorLineNumbers.includes(i) ? ' error-line' : '';
         html += `<div class="gutter-num${errorClass}">${i}</div>`;
     }
     gutter.innerHTML = html;
@@ -1929,7 +1944,7 @@ function newFile() {
     document.getElementById('console-output').textContent = 'New file created. Start writing your pseudocode.';
     document.getElementById('console-output').className = 'output-content';
     document.getElementById('line-count').textContent = '3 lines';
-    currentErrorLineNumber = null;
+    currentErrorLineNumbers = [];
     clearEditorErrors('pseudocode-editor');
     updateGutter();
 
