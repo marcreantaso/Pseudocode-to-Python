@@ -270,12 +270,11 @@ function translatePseudocode() {
     const runBtn = document.querySelector('#page-write-pseudocode .btn-success');
 
     if (!validation.valid) {
-        // Output formatted HTML errors into the element
-        const errorOutput = renderHtmlErrors(validation.errors);
-        document.getElementById('python-output').innerHTML = errorOutput;
+        // Clear the python output area
+        document.getElementById('python-output').textContent = '';
 
         currentErrorLineNumber = validation.errors[0].line;
-        output.className = 'output-content';
+        output.className = 'output-content error';
         output.innerHTML = renderHtmlErrors(validation.errors);
 
         if (runBtn) runBtn.disabled = true;
@@ -304,12 +303,22 @@ function translateFromPage() {
     }
 
     const validation = validatePseudocode(input);
+    const consoleEl = document.getElementById('translate-console');
+
     if (!validation.valid) {
-        document.getElementById('translate-output').innerHTML = renderHtmlErrors(validation.errors);
-        showToast(`${validation.errors.length} syntax error(s) found.`, 'error');
+        if (consoleEl) {
+            consoleEl.innerHTML = renderHtmlErrors(validation.errors);
+            consoleEl.className = 'output-content error';
+        }
+        document.getElementById('translate-output').textContent = '';
+        showToast(`${validation.errors.length} syntax error(s) found. Check the output area.`, 'error');
         return;
     }
 
+    if (consoleEl) {
+        consoleEl.textContent = '✅ Pseudocode translated successfully! Click "Run" to execute.';
+        consoleEl.className = 'output-content';
+    }
     const python = pseudocodeToPython(input);
     document.getElementById('translate-output').textContent = python;
     showToast('Translation complete!', 'success');
@@ -323,12 +332,22 @@ function instructorTranslate() {
     }
 
     const validation = validatePseudocode(input);
+    const consoleEl = document.getElementById('instructor-console');
+
     if (!validation.valid) {
-        document.getElementById('instructor-python-output').innerHTML = renderHtmlErrors(validation.errors);
-        showToast(`${validation.errors.length} syntax error(s) found.`, 'error');
+        if (consoleEl) {
+            consoleEl.innerHTML = renderHtmlErrors(validation.errors);
+            consoleEl.className = 'output-content error';
+        }
+        document.getElementById('instructor-python-output').textContent = '';
+        showToast(`${validation.errors.length} syntax error(s) found. Check the output area.`, 'error');
         return;
     }
 
+    if (consoleEl) {
+        consoleEl.textContent = '✅ Pseudocode translated successfully! Click "Run" to execute.';
+        consoleEl.className = 'output-content';
+    }
     const python = pseudocodeToPython(input);
     document.getElementById('instructor-python-output').textContent = python;
     showToast('Python code generated!', 'success');
