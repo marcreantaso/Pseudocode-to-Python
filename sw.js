@@ -4,18 +4,21 @@
    ============================================================ */
 
 const CACHE_NAME = 'pseudopy-v15';
-const ASSETS_TO_CACHE = [
-    '/',
-    '/index.html',
-    '/style.css',
-    '/mapper.js',
-    '/app.js',
-    '/compiler.js',
-    '/dataset.js',
-    '/metrics.js',
-    '/manifest.json',
-    '/database.js',
+const LOCAL_ASSETS = [
+    './',
+    './index.html',
+    './style.css',
+    './mapper.js',
+    './app.js',
+    './compiler.js',
+    './dataset.js',
+    './metrics.js',
+    './manifest.json',
+    './database.js',
+    './icons/icon.svg'
+];
 
+const EXTERNAL_ASSETS = [
     'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap',
     'https://skulpt.org/js/skulpt.min.js',
     'https://skulpt.org/js/skulpt-stdlib.js',
@@ -27,10 +30,15 @@ const ASSETS_TO_CACHE = [
 self.addEventListener('install', (event) => {
     event.waitUntil(
         caches.open(CACHE_NAME).then((cache) => {
-            console.log('[SW] Caching core assets');
-            return cache.addAll(ASSETS_TO_CACHE);
-        }).catch(err => {
-            console.warn('[SW] Some assets failed to cache:', err);
+            console.log('[SW] Caching core local assets');
+            // Cache local assets atomically
+            cache.addAll(LOCAL_ASSETS).catch(err => console.warn('[SW] Some local assets failed:', err));
+            
+            // Cache external assets individually (to prevent single-failure halting everything)
+            EXTERNAL_ASSETS.forEach(url => {
+                const req = new Request(url, { mode: 'no-cors' });
+                fetch(req).then(response => cache.put(req, response)).catch(err => console.warn('[SW] External asset failed:', url, err));
+            });
         })
     );
     self.skipWaiting();
@@ -57,8 +65,8 @@ self.addEventListener('fetch', (event) => {
                 return cachedResponse;
             }
             return fetch(event.request).then((networkResponse) => {
-                // Cache successful GET responses
-                if (event.request.method === 'GET' && networkResponse.status === 200) {
+                // Cache successful GET responses (allow opaque status 0 for CDNs)
+                if (event.request.method === 'GET' && (networkResponse.status === 200 || networkResponse.status === 0)) {
                     const responseClone = networkResponse.clone();
                     caches.open(CACHE_NAME).then((cache) => {
                         cache.put(event.request, responseClone);

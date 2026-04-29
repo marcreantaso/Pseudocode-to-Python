@@ -39,7 +39,7 @@ async function init() {
         cachedActivity = await dbGetAll(activityRef);
 
         console.log(`[App] Loaded ${cachedUsers.length} users, ${cachedExercises.length} exercises, ${cachedActivity.length} activity records from Offline Database.`);
-        
+
         // Initialize Theme from Storage
         const savedTheme = localStorage.getItem('pseudopy_theme') || 'dark';
         document.documentElement.setAttribute('data-theme', savedTheme);
@@ -759,9 +759,9 @@ function generateFeedback(pseudocode) {
     if (activeSolution && logicCard && logicResults) {
         const logicAnalysis = metricsEngine.analyzeLogicGap(pseudocode, activeSolution);
         logicCard.classList.remove('hidden');
-        
+
         let logicHtml = `<p style="margin-bottom: 1rem; font-weight: 500;">${logicAnalysis.summary}</p>`;
-        
+
         if (logicAnalysis.gaps.length > 0) {
             logicHtml += `<div style="display: flex; flex-direction: column; gap: 0.75rem;">`;
             logicAnalysis.gaps.forEach(gap => {
@@ -2227,7 +2227,7 @@ function togglePasswordVisibility(inputId, btn) {
     if (input.type === 'password') {
         input.type = 'text';
         btn.textContent = '🙈'; // Closed eye
-}
+    }
 }
 window.togglePasswordVisibility = togglePasswordVisibility;
 
@@ -2363,7 +2363,7 @@ function loadCompilerMetrics() {
                     <span>${timing.avgLexTime}ms</span>
                 </div>
                 <div style="width: 100%; background: #eee; height: 8px; border-radius: 4px; margin-bottom: 1rem;">
-                    <div style="width: ${(timing.avgLexTime/total)*100}%; background: #3b82f6; height: 100%; border-radius: 4px;"></div>
+                    <div style="width: ${(timing.avgLexTime / total) * 100}%; background: #3b82f6; height: 100%; border-radius: 4px;"></div>
                 </div>
                 
                 <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
@@ -2371,7 +2371,7 @@ function loadCompilerMetrics() {
                     <span>${timing.avgParseTime}ms</span>
                 </div>
                 <div style="width: 100%; background: #eee; height: 8px; border-radius: 4px; margin-bottom: 1rem;">
-                    <div style="width: ${(timing.avgParseTime/total)*100}%; background: #8b5cf6; height: 100%; border-radius: 4px;"></div>
+                    <div style="width: ${(timing.avgParseTime / total) * 100}%; background: #8b5cf6; height: 100%; border-radius: 4px;"></div>
                 </div>
 
                 <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
@@ -2379,7 +2379,7 @@ function loadCompilerMetrics() {
                     <span>${timing.avgSemanticTime}ms</span>
                 </div>
                 <div style="width: 100%; background: #eee; height: 8px; border-radius: 4px; margin-bottom: 1rem;">
-                    <div style="width: ${(timing.avgSemanticTime/total)*100}%; background: #f59e0b; height: 100%; border-radius: 4px;"></div>
+                    <div style="width: ${(timing.avgSemanticTime / total) * 100}%; background: #f59e0b; height: 100%; border-radius: 4px;"></div>
                 </div>
 
                 <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
@@ -2387,7 +2387,7 @@ function loadCompilerMetrics() {
                     <span>${timing.avgCodeGenTime}ms</span>
                 </div>
                 <div style="width: 100%; background: #eee; height: 8px; border-radius: 4px; margin-bottom: 1rem;">
-                    <div style="width: ${(timing.avgCodeGenTime/total)*100}%; background: #10b981; height: 100%; border-radius: 4px;"></div>
+                    <div style="width: ${(timing.avgCodeGenTime / total) * 100}%; background: #10b981; height: 100%; border-radius: 4px;"></div>
                 </div>
             </div>
         `;
@@ -2396,25 +2396,25 @@ function loadCompilerMetrics() {
 
 async function runBenchmarkTest() {
     if (typeof metricsEngine === 'undefined') return;
-    
+
     showToast('Running benchmark tests...', 'info');
-    
+
     try {
         // Use global constant from dataset.js instead of fetch() to avoid CORS/offline issues
         if (typeof GROUND_TRUTH_DATASET === 'undefined') {
             throw new Error("GROUND_TRUTH_DATASET not loaded.");
         }
-        
+
         const compiler = new PseudocodeCompiler();
         const results = metricsEngine.runBenchmark(GROUND_TRUTH_DATASET, compiler);
-        
+
         document.getElementById('benchmark-accuracy').textContent = results.accuracy + '%';
         document.getElementById('benchmark-precision').textContent = results.avgPrecision + '%';
         document.getElementById('benchmark-recall').textContent = results.avgRecall + '%';
         document.getElementById('benchmark-f1').textContent = results.f1Score;
         document.getElementById('benchmark-compile-rate').textContent = results.compilationSuccessRate + '%';
         document.getElementById('benchmark-avg-time').textContent = results.avgTimeMs + 'ms';
-        
+
         // Detailed per-test results hidden to optimize UI for learning analytics
         // (Mastery aggregation below provides more academic value)
 
@@ -2437,7 +2437,7 @@ async function runBenchmarkTest() {
                 </tr>
             `;
         }).join('');
-        
+
         showToast('Benchmark complete!', 'success');
     } catch (e) {
         console.error(e);
@@ -2449,7 +2449,7 @@ async function runBenchmarkTest() {
 function exportData(type) {
     const data = localStorage.getItem('pseudopy_' + type);
     if (!data) return showToast('No data to export.', 'warning');
-    
+
     const blob = new Blob([data], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -2472,10 +2472,10 @@ function exportData(type) {
 function toggleTheme() {
     const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
     const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-    
+
     document.documentElement.setAttribute('data-theme', newTheme);
     localStorage.setItem('pseudopy_theme', newTheme);
-    
+
     const icon = newTheme === 'dark' ? '🌓' : '☀️';
     showToast(`Switched to ${newTheme} mode`, 'info');
 }
