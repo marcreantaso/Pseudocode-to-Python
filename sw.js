@@ -11,7 +11,7 @@ const LOCAL_ASSETS = [
     './mapper.js',
     './app.js',
     './compiler.js',
-    './dataset.js',
+    './dataset.json',
     './metrics.js',
     './manifest.json',
     './database.js',

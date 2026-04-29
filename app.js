@@ -17,6 +17,9 @@ let currentErrorLineNumbers = [];
 let cachedUsers = [];
 let cachedExercises = [];
 let cachedActivity = [];
+let instructorExOffset = 0;
+let studentExOffset = 0;
+const EX_PAGE_LIMIT = 20;
 
 
 /* ============================================================
@@ -35,10 +38,10 @@ async function init() {
 
         // Pre-load data from Offline Database into cache
         cachedUsers = await dbGetAll(usersRef);
-        cachedExercises = await dbGetAll(exercisesRef);
+        cachedExercises = await dbGetAll(exercisesRef, EX_PAGE_LIMIT, 0);
         cachedActivity = await dbGetAll(activityRef);
 
-        console.log(`[App] Loaded ${cachedUsers.length} users, ${cachedExercises.length} exercises, ${cachedActivity.length} activity records from Offline Database.`);
+        console.log(`[App] Loaded users, max ${EX_PAGE_LIMIT} exercises, and activity records from IndexedDB.`);
 
         // Initialize Theme from Storage
         const savedTheme = localStorage.getItem('pseudopy_theme') || 'dark';
@@ -958,56 +961,83 @@ function renderFeedback(feedback) {
    EXERCISES MANAGEMENT — Offline Database CRUD
    ============================================================ */
 
-async function loadExercises() {
-    const exercises = await refreshExercises();
+async function loadExercises(append = false) {
+    if (!append) instructorExOffset = 0;
+    const exercises = await dbGetAll(exercisesRef, EX_PAGE_LIMIT, instructorExOffset);
     const container = document.getElementById('exercises-list');
 
-    if (exercises.length === 0) {
+    if (exercises.length === 0 && !append) {
         container.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon">📋</div><h3>No Exercises Yet</h3><p>Create your first exercise to get started.</p></div>`;
         return;
     }
 
-    container.innerHTML = exercises.map(ex => `
+    const html = exercises.map(ex => `
     <div class="exercise-card">
       <div class="ex-header">
         <span class="ex-title">${ex.title}</span>
         <span class="ex-difficulty ${ex.difficulty}">${ex.difficulty}</span>
       </div>
       <p class="ex-desc">${ex.description}</p>
-      <div class="ex-meta"><span>📅 ${ex.createdAt}</span></div>
+      <div class="ex-meta"><span>📅 ${ex.createdAt || 'N/A'}</span></div>
       <div class="ex-actions">
-        <button class="btn btn-secondary btn-sm" onclick="editExercise('${ex.id}')">✏️ Edit</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteExercise('${ex.id}')">🗑️ Delete</button>
+        <button class="btn btn-secondary btn-sm" onclick="editExercise('${ex._docId}')">✏️ Edit</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteExercise('${ex._docId}')">🗑️ Delete</button>
       </div>
     </div>`).join('');
+
+    if (append) {
+        const btn = document.getElementById('load-more-instructor');
+        if (btn) btn.remove();
+        container.innerHTML += html;
+    } else {
+        container.innerHTML = html;
+    }
+
+    if (exercises.length === EX_PAGE_LIMIT) {
+        instructorExOffset += EX_PAGE_LIMIT;
+        container.innerHTML += `<div id="load-more-instructor" style="grid-column:1/-1; text-align:center; padding: 1rem;"><button class="btn btn-secondary" onclick="loadExercises(true)">Load More</button></div>`;
+    }
 }
 
-async function loadStudentExercises() {
-    const exercises = await refreshExercises();
+async function loadStudentExercises(append = false) {
+    if (!append) studentExOffset = 0;
+    const exercises = await dbGetAll(exercisesRef, EX_PAGE_LIMIT, studentExOffset);
     const container = document.getElementById('student-exercises-list');
 
-    if (exercises.length === 0) {
+    if (exercises.length === 0 && !append) {
         container.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon">📝</div><h3>No Exercises Available</h3><p>Your instructor hasn't created any exercises yet.</p></div>`;
         return;
     }
 
-    container.innerHTML = exercises.map(ex => `
+    const html = exercises.map(ex => `
     <div class="exercise-card">
       <div class="ex-header">
         <span class="ex-title">${ex.title}</span>
         <span class="ex-difficulty ${ex.difficulty}">${ex.difficulty}</span>
       </div>
       <p class="ex-desc">${ex.description}</p>
-      <div class="ex-meta"><span>📅 ${ex.createdAt}</span></div>
+      <div class="ex-meta"><span>📅 ${ex.createdAt || 'N/A'}</span></div>
       <div class="ex-actions">
-        <button class="btn btn-primary btn-sm" style="width:auto" onclick="attemptExercise('${ex.id}')">📝 Start Exercise</button>
+        <button class="btn btn-primary btn-sm" style="width:auto" onclick="attemptExercise('${ex._docId}')">📝 Start Exercise</button>
       </div>
     </div>`).join('');
+
+    if (append) {
+        const btn = document.getElementById('load-more-student');
+        if (btn) btn.remove();
+        container.innerHTML += html;
+    } else {
+        container.innerHTML = html;
+    }
+
+    if (exercises.length === EX_PAGE_LIMIT) {
+        studentExOffset += EX_PAGE_LIMIT;
+        container.innerHTML += `<div id="load-more-student" style="grid-column:1/-1; text-align:center; padding: 1rem;"><button class="btn btn-secondary" onclick="loadStudentExercises(true)">Load More</button></div>`;
+    }
 }
 
 async function attemptExercise(id) {
-    const exercises = cachedExercises.length ? cachedExercises : await refreshExercises();
-    const ex = exercises.find(e => e.id === id);
+    const ex = await dbGet(exercisesRef, id);
     if (!ex) return;
     document.getElementById('pseudocode-editor').value = '';
     document.getElementById('python-output').innerHTML = '';
@@ -1021,8 +1051,7 @@ async function openExerciseModal(id = null) {
     const title = document.getElementById('exercise-modal-title');
 
     if (id) {
-        const exercises = cachedExercises.length ? cachedExercises : await refreshExercises();
-        const ex = exercises.find(e => e.id === id);
+        const ex = await dbGet(exercisesRef, id);
         if (ex) {
             title.textContent = 'Edit Exercise';
             document.getElementById('ex-title').value = ex.title;
@@ -1055,8 +1084,7 @@ async function saveExercise() {
 
     try {
         if (editingExerciseId) {
-            const ex = cachedExercises.find(e => e.id === editingExerciseId);
-            if (ex) await dbUpdate(exercisesRef, ex._docId, { title, description: desc, difficulty, solution });
+            await dbUpdate(exercisesRef, editingExerciseId, { title, description: desc, difficulty, solution });
             showToast('Exercise updated successfully!', 'success');
         } else {
             const newId = 'ex' + Date.now();
@@ -1080,8 +1108,7 @@ function editExercise(id) { openExerciseModal(id); }
 async function deleteExercise(id) {
     if (!confirm('Delete this exercise?')) return;
     try {
-        const ex = cachedExercises.find(e => e.id === id);
-        if (ex) await dbDelete(exercisesRef, ex._docId);
+        await dbDelete(exercisesRef, id);
         await loadExercises();
         showToast('Exercise deleted.', 'info');
     } catch (err) {
