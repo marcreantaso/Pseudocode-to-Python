@@ -8,7 +8,28 @@
 
 class NaturalLanguageMapper {
     constructor() {
-        // Define mapping rules (regex pattern -> replacement string)
+        // ── Arithmetic word-phrase rules (global, applied before structural rules) ──
+        // These are applied as global substitutions on every line.
+        this.arithmeticPhrases = [
+            // Multi-word arithmetic phrases must come BEFORE single-word ones
+            { pattern: /\bMULTIPLIED\s+BY\b/gi,  replacement: '*'   },
+            { pattern: /\bDIVIDED\s+BY\b/gi,     replacement: '/'   },
+            { pattern: /\bPLUS\b/gi,             replacement: '+'   },
+            { pattern: /\bMINUS\b/gi,            replacement: '-'   },
+        ];
+
+        // ── Comparison word-phrase rules (global, applied before structural rules) ──
+        // Longer phrases must be listed first to avoid partial matches.
+        this.comparisonPhrases = [
+            { pattern: /\bIS\s+GREATER\s+THAN\s+OR\s+EQUAL\s+TO\b/gi, replacement: '>='  },
+            { pattern: /\bIS\s+LESS\s+THAN\s+OR\s+EQUAL\s+TO\b/gi,    replacement: '<='  },
+            { pattern: /\bIS\s+NOT\s+EQUAL\s+TO\b/gi,                 replacement: '!='  },
+            { pattern: /\bIS\s+EQUAL\s+TO\b/gi,                       replacement: '=='  },
+            { pattern: /\bIS\s+GREATER\s+THAN\b/gi,                   replacement: '>'   },
+            { pattern: /\bIS\s+LESS\s+THAN\b/gi,                      replacement: '<'   },
+        ];
+
+        // ── Structural mapping rules (regex pattern -> replacement string) ──
         this.rules = [
             // Assignment / Set
             { pattern: /^(?:set|make|assign|let)\s+(?:variable\s+)?([a-zA-Z_]\w*)\s+(?:to|equal to|be|=|as)\s+(.+)$/i, replacement: "SET $1 TO $2" },
@@ -30,10 +51,10 @@ class NaturalLanguageMapper {
             { pattern: /^(?:read|input|get|ask for)\s+(?:variable\s+)?([a-zA-Z_]\w*)$/i, replacement: "INPUT $1" },
             { pattern: /^(?:ask|prompt)\s+(?:user\s+)?for\s+([a-zA-Z_]\w*)$/i, replacement: "INPUT $1" },
             
-            // Conditional: If
-            { pattern: /^(?:if|check if|when)\s+(.+)$/i, replacement: "IF $1 THEN" },
+            // Conditional: If — only append THEN if not already present
+            { pattern: /^(?:if|check if|when)\s+(.+?)(?:\s+THEN)?$/i, replacement: "IF $1 THEN" },
             { pattern: /^(?:otherwise|else)$/i, replacement: "ELSE" },
-            { pattern: /^(?:otherwise if|else if)\s+(.+)$/i, replacement: "ELSE IF $1 THEN" },
+            { pattern: /^(?:otherwise if|else if)\s+(.+?)(?:\s+THEN)?$/i, replacement: "ELSE IF $1 THEN" },
             
             // Blocks
             { pattern: /^(?:start|begin)$/i, replacement: "BEGIN" },
@@ -48,6 +69,25 @@ class NaturalLanguageMapper {
     }
 
     /**
+     * Apply global word-phrase substitutions (arithmetic + comparison) to a single line.
+     * These run BEFORE structural mapping so they work inside any expression context.
+     */
+    applyPhrases(line) {
+        // Skip comment lines
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith('//') || trimmed.startsWith('#')) return line;
+
+        let result = line;
+        for (const rule of this.comparisonPhrases) {
+            result = result.replace(rule.pattern, rule.replacement);
+        }
+        for (const rule of this.arithmeticPhrases) {
+            result = result.replace(rule.pattern, rule.replacement);
+        }
+        return result;
+    }
+
+    /**
      * Map natural language text to structured pseudocode
      * @param {string} text - The input natural language code
      * @returns {string} The structured pseudocode
@@ -55,7 +95,10 @@ class NaturalLanguageMapper {
     map(text) {
         if (!text) return text;
         const lines = text.split('\n');
-        const mappedLines = lines.map(line => this.mapLine(line));
+        // Phase 1: apply arithmetic + comparison word-phrase substitutions
+        const phraseMapped = lines.map(line => this.applyPhrases(line));
+        // Phase 2: apply structural mapping rules
+        const mappedLines = phraseMapped.map(line => this.mapLine(line));
         return mappedLines.join('\n');
     }
 

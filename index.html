@@ -78,7 +78,7 @@
       <div class="login-card">
         <div class="login-card-header">
           <h2>Sign In</h2>
-          <p>Enter your credentials and select your role to continue.</p>
+          <p>Enter your credentials to continue.</p>
         </div>
 
         <div class="form-group">
@@ -98,36 +98,49 @@
           </div>
         </div>
 
-        <div class="form-group">
-          <label>Select Role</label>
-          <div class="role-selector">
-            <div class="role-option">
-              <input type="radio" name="role" id="role-student" value="student" checked>
-              <label for="role-student">
-                <span class="role-icon">🎓</span>
-                <span class="role-name">Student</span>
-              </label>
-            </div>
-            <div class="role-option">
-              <input type="radio" name="role" id="role-instructor" value="instructor">
-              <label for="role-instructor">
-                <span class="role-icon">👨‍🏫</span>
-                <span class="role-name">Instructor</span>
-              </label>
-            </div>
-            <div class="role-option">
-              <input type="radio" name="role" id="role-admin" value="admin">
-              <label for="role-admin">
-                <span class="role-icon">🔧</span>
-                <span class="role-name">Admin</span>
-              </label>
-            </div>
-          </div>
-        </div>
+
 
         <button class="btn btn-primary" onclick="handleLogin()">
           Sign In →
         </button>
+
+        <!-- ── Login Credentials Guide ── -->
+        <div class="login-hint-box">
+          <div class="login-hint-header" onclick="toggleLoginHint(this)">
+            <span>💡 How to log in</span>
+            <span class="login-hint-arrow">▾</span>
+          </div>
+          <div class="login-hint-body">
+            <p class="login-hint-note">
+              Your username follows the format: <strong>name_role</strong><br>
+              The system will automatically detect your role based on your username.
+            </p>
+            <div class="login-hint-table">
+              <div class="login-hint-row login-hint-head">
+                <span>Username Format</span>
+                <span>Logs in as</span>
+              </div>
+              <div class="login-hint-row hint-row-2col">
+                <span class="hint-username" onclick="fillLoginUser('mbautista_admin')">mbautista_admin</span>
+                <span class="hint-badge hint-admin">🔧 Admin</span>
+              </div>
+              <div class="login-hint-row hint-row-2col">
+                <span class="hint-username" onclick="fillLoginUser('mreantaso_instructor')">mreantaso_instructor</span>
+                <span class="hint-badge hint-instructor">👨‍🏫 Instructor</span>
+              </div>
+              <div class="login-hint-row hint-row-2col">
+                <span class="hint-username" onclick="fillLoginUser('emirandilla_student')">emirandilla_student</span>
+                <span class="hint-badge hint-student">🎓 Student</span>
+              </div>
+              <div class="login-hint-row hint-row-2col">
+                <span class="hint-username" onclick="fillLoginUser('mdaet_student')">mdaet_student</span>
+                <span class="hint-badge hint-student">🎓 Student</span>
+              </div>
+            </div>
+            <p class="login-hint-tip">💬 Click any username to auto-fill it.</p>
+          </div>
+        </div>
+
 
         <div class="login-footer-text">
           <span>Pseudocode to Python &copy; 2026</span>
@@ -160,21 +173,14 @@
           <button class="nav-item active" onclick="navigateTo('write-pseudocode')">
             <span class="nav-icon">✏️</span> Write Pseudocode
           </button>
-          <button class="nav-item" onclick="navigateTo('translate')">
-            <span class="nav-icon">🔄</span> Translate to Python
-          </button>
-          <button class="nav-item" onclick="navigateTo('execute')">
-            <span class="nav-icon">▶️</span> Execute Code
-          </button>
+
           <button class="nav-item" onclick="navigateTo('feedback')">
             <span class="nav-icon">💡</span> Feedback &amp; Suggestions
           </button>
           <button class="nav-item" onclick="navigateTo('exercises-student')">
             <span class="nav-icon">📝</span> Exercises &amp; Tasks
           </button>
-          <button class="nav-item" onclick="navigateTo('change-password')">
-            <span class="nav-icon">🔑</span> Change Password
-          </button>
+
           <button class="nav-item" onclick="navigateTo('student-settings')">
             <span class="nav-icon">⚙️</span> Settings
           </button>
@@ -195,9 +201,7 @@
           <button class="nav-item" onclick="navigateTo('compiler-metrics')">
             <span class="nav-icon">🧪</span> Compiler Metrics
           </button>
-          <button class="nav-item" onclick="navigateTo('change-password')">
-            <span class="nav-icon">🔑</span> Change Password
-          </button>
+
         </div>
 
         <!-- Admin Nav -->
@@ -209,9 +213,7 @@
           <button class="nav-item" onclick="navigateTo('password-requests')">
             <span class="nav-icon">🔑</span> Password History
           </button>
-          <button class="nav-item" onclick="navigateTo('admin-execute')">
-            <span class="nav-icon">▶️</span> Execute Code
-          </button>
+
         </div>
       </nav>
 
@@ -255,6 +257,46 @@
            PAGE: Write Pseudocode (Student)
            ═══════════════════════════════════ -->
       <div id="page-write-pseudocode" class="page-view">
+        
+        <!-- Active Exercise Panel (Sticky) -->
+        <div id="active-exercise-panel" class="hidden" style="position: sticky; top: 0; z-index: 10; margin-bottom: 1.5rem; border-radius: var(--radius-lg); box-shadow: var(--shadow-md);">
+          <div class="panel-header" style="justify-content: space-between; background: var(--bg-card); border: 1px solid var(--border); border-bottom: none; border-radius: var(--radius-lg) var(--radius-lg) 0 0; padding: 1rem 1.5rem;">
+            <div style="display: flex; align-items: center; gap: 1rem;">
+              <h3 style="margin: 0; display: flex; align-items: center; gap: 0.5rem;">
+                <span style="font-size: 1.2rem;">📝</span>
+                <span id="active-ex-title">Exercise Title</span>
+              </h3>
+              <span class="badge" id="active-ex-difficulty">Medium</span>
+              <span class="badge badge-warning" id="active-ex-status" style="margin-left: 0.5rem;">🟡 Status: In Progress</span>
+            </div>
+            <div style="display: flex; gap: 0.5rem; align-items: center;">
+              <button class="btn btn-success btn-sm hidden" id="btn-submit-exercise" onclick="submitExercise()">Submit Exercise</button>
+              <button class="btn btn-ghost btn-sm" id="btn-toggle-instructions" onclick="toggleExerciseInstructions()">Hide Instructions</button>
+              <button class="btn btn-secondary btn-sm" onclick="changeExercise()">Change Exercise</button>
+            </div>
+          </div>
+          <div id="active-ex-content" class="panel-body" style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 0 0 var(--radius-lg) var(--radius-lg); padding: 1.5rem;">
+            <div style="margin-bottom: 0.5rem;">
+              <strong style="color: var(--primary);">Problem Description:</strong>
+              <p id="active-ex-desc" style="margin-top: 0.5rem; margin-bottom: 0; color: var(--text-secondary); line-height: 1.6; white-space: pre-wrap;">Description goes here.</p>
+            </div>
+            <div id="active-ex-constraints" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border); font-size: 0.9rem; color: var(--text-muted);">
+              <strong>Constraints & Guidelines:</strong> Use supported keywords (e.g., SET, IF, WHILE). Ensure all blocks are properly closed (END IF, END WHILE).
+            </div>
+          </div>
+          
+          <!-- Submission Success Overlay -->
+          <div id="submission-success-overlay" class="hidden" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); z-index: 20; border-radius: var(--radius-lg); display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; color: white;">
+            <div style="font-size: 4rem; margin-bottom: 1rem;">✅</div>
+            <h2 style="margin: 0 0 0.5rem 0; color: var(--success);">Exercise Submitted Successfully</h2>
+            <div style="color: #aaa; font-size: 1.1rem; margin-bottom: 2rem;">
+              Submission Time:<br>
+              <span id="submission-time-display" style="color: white; font-weight: bold;">--</span>
+            </div>
+            <button class="btn btn-primary" onclick="changeExercise()">Return to Exercises</button>
+          </div>
+        </div>
+
         <div class="editor-layout">
           <div class="editor-panel">
             <div class="panel-header">
@@ -263,6 +305,7 @@
             <div class="panel-body">
               <div class="editor-with-gutter">
                 <div id="editor-gutter" class="editor-gutter"></div>
+                <div id="editor-highlights" class="editor-highlights"></div>
                 <textarea id="pseudocode-editor" class="code-editor" spellcheck="false"
                   placeholder="Write your pseudocode here...&#10;&#10;Example:&#10;BEGIN&#10;  SET x TO 10&#10;  IF x > 5 THEN&#10;    DISPLAY &quot;x is large&quot;&#10;  ELSE&#10;    DISPLAY &quot;x is small&quot;&#10;  END IF&#10;END"></textarea>
               </div>
@@ -299,7 +342,12 @@
               <button class="btn btn-sm btn-ghost" onclick="copyPython()" title="Copy to clipboard">📋 Copy</button>
             </div>
             <div class="panel-body">
-              <div id="python-output" class="code-editor" style="overflow-y: auto; white-space: pre-wrap;" contenteditable="false" data-placeholder="Translated Python code will appear here..."></div>
+              <div class="editor-with-gutter">
+                <div id="python-gutter" class="editor-gutter"></div>
+                <div id="python-highlights" class="editor-highlights"></div>
+                <textarea id="python-output" class="code-editor" spellcheck="false"
+                  placeholder="Translated Python code will appear here..."></textarea>
+              </div>
             </div>
             <div class="panel-footer">
               <button class="btn btn-success btn-sm" onclick="executePython()">
@@ -361,7 +409,8 @@
               <h3>🐍 Result <span class="lang-badge python">Python</span></h3>
             </div>
             <div class="panel-body">
-              <div id="translate-output" class="code-editor" style="overflow-y: auto; white-space: pre-wrap;" contenteditable="false" data-placeholder="Python code appears here after translation..."></div>
+              <textarea id="translate-output" class="code-editor" spellcheck="false"
+                placeholder="Python code appears here after translation..."></textarea>
             </div>
             <div class="panel-footer">
               <button class="btn btn-success btn-sm" onclick="executeFromTranslate()">▶️ Run</button>
@@ -469,11 +518,33 @@
            PAGE: Student Exercises
            ═══════════════════════════════════ -->
       <div id="page-exercises-student" class="page-view hidden">
-        <div class="page-header">
+        <div class="page-header" style="justify-content: space-between;">
           <div>
             <h2>📝 Available Exercises</h2>
             <p>Practice writing pseudocode with these exercises from your instructor.</p>
           </div>
+          <div id="student-progress-container" style="text-align: right;">
+            <div style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 0.5rem; font-weight: 500;">
+              Completed Exercises: <span id="student-completed-count" style="color: var(--primary);">0</span> / <span id="student-total-count">0</span>
+            </div>
+            <div class="progress-bar-bg" style="width: 200px; height: 8px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 4px; overflow: hidden;">
+              <div id="student-progress-fill" style="width: 0%; height: 100%; background: var(--success); transition: width 0.3s ease;"></div>
+            </div>
+          </div>
+        </div>
+        <div class="instruction-panel" style="background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1.25rem; margin-bottom: 1.5rem; box-shadow: var(--shadow-sm);">
+          <h3 style="margin-top: 0; margin-bottom: 0.75rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem; font-size: 1.1rem;">
+            <span>ℹ️</span> Instructions & Guidelines
+          </h3>
+          <ul style="margin: 0; padding-left: 1.25rem; font-size: 0.875rem; color: var(--text-secondary); line-height: 1.6;">
+            <li><strong>Read the problem carefully</strong> before answering.</li>
+            <li><strong>Write your pseudocode</strong> using the supported syntax.</li>
+            <li>Click <strong>"Translate to Python"</strong> to generate Python code.</li>
+            <li><strong>Review the generated Python code</strong>.</li>
+            <li>Click <strong>"Run Code"</strong> to test your solution.</li>
+            <li><strong>Correct any syntax or runtime errors</strong> shown in the console.</li>
+            <li><strong>Submit your completed exercise</strong> once it produces the expected output.</li>
+          </ul>
         </div>
         <div id="student-exercises-list" class="exercises-grid"></div>
       </div>
@@ -601,12 +672,13 @@
               <h3>🐍 Generated Python <span class="lang-badge python">Python</span></h3>
             </div>
             <div class="panel-body">
-              <div id="instructor-python-output" class="code-editor" style="overflow-y: auto; white-space: pre-wrap;" contenteditable="false" data-placeholder="Generated Python code..."></div>
+              <textarea id="instructor-python-output" class="code-editor" spellcheck="false"
+                placeholder="Generated Python code..."></textarea>
             </div>
             <div class="panel-footer">
               <button class="btn btn-success btn-sm" onclick="instructorExecute()">▶️ Run</button>
               <button class="btn btn-secondary btn-sm"
-                onclick="copyText(document.getElementById('instructor-python-output').value)">📋 Copy</button>
+                onclick="copyInstructorOutput()">📋 Copy</button>
             </div>
           </div>
         </div>
@@ -1158,7 +1230,23 @@
 
   <!-- Service Worker Registration -->
   <script>
-    if ('serviceWorker' in navigator) {
+    if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
+      // Dev mode: Disable caching and unregister Service Workers to prevent stale files on refresh
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(registrations => {
+          for (let registration of registrations) {
+            registration.unregister();
+          }
+        });
+      }
+      if ('caches' in window) {
+        caches.keys().then(names => {
+          for (let name of names) {
+            caches.delete(name);
+          }
+        });
+      }
+    } else if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('sw.js').then(reg => {
           console.log('[PWA] Service Worker registered:', reg.scope);

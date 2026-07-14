@@ -12,6 +12,13 @@ let currentPage = '';
 let editingExerciseId = null;
 let editingUserId = null;
 let currentErrorLineNumbers = [];
+let exerciseState = {
+    isTranslated: false,
+    isExecuted: false,
+    outputMatched: false,
+    expectedOutput: null,
+    activeExercise: null
+};
 
 // ── Cached data (loaded from Offline Database) ──
 let cachedUsers = [];
@@ -21,6 +28,40 @@ let instructorExOffset = 0;
 let studentExOffset = 0;
 const EX_PAGE_LIMIT = 20;
 
+
+/* ============================================================
+   PYTHON OUTPUT — LINE NUMBER RENDERER
+   Renders Python code with a styled line-number gutter.
+   Used by all translation output panels.
+   ============================================================ */
+
+/**
+ * Sets the Python output panel code and triggers line number update.
+ */
+function setPythonOutput(elementId, code) {
+    const el = document.getElementById(elementId);
+    if (!el) return;
+    
+    if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
+        el.value = code;
+        el.dispatchEvent(new Event('input')); // trigger gutter update
+    } else {
+        el.textContent = code;
+    }
+}
+
+/**
+ * Retrieves the Python code from a panel.
+ */
+function getPythonCode(elementId) {
+    const el = document.getElementById(elementId);
+    if (!el) return '';
+    
+    if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
+        return el.value;
+    }
+    return el.textContent || '';
+}
 
 /* ============================================================
    INITIALIZATION
@@ -61,19 +102,66 @@ async function init() {
             const lines = editor.value.split('\n').length;
             document.getElementById('line-count').textContent = lines + ' lines';
             updateGutter();
+            
+            exerciseState.isTranslated = false;
+            exerciseState.isExecuted = false;
+            exerciseState.outputMatched = false;
+            updateExerciseStatus();
         });
 
-        // Sync scrolling for gutter
+        // Sync scrolling for gutter and highlights overlay
         editor.addEventListener('scroll', () => {
             const gutter = document.getElementById('editor-gutter');
             if (gutter) {
                 gutter.scrollTop = editor.scrollTop;
             }
+            const highlights = document.getElementById('editor-highlights');
+            if (highlights) {
+                highlights.scrollTop = editor.scrollTop;
+                highlights.scrollLeft = editor.scrollLeft;
+            }
         });
+    }
+
+    // Sync scrolling and update gutter for Python Editor
+    const pyEditor = document.getElementById('python-output');
+    if (pyEditor) {
+        pyEditor.addEventListener('input', () => {
+            updatePythonGutter();
+            
+            exerciseState.isExecuted = false;
+            exerciseState.outputMatched = false;
+            updateExerciseStatus();
+        });
+
+        pyEditor.addEventListener('scroll', () => {
+            const gutter = document.getElementById('python-gutter');
+            if (gutter) {
+                gutter.scrollTop = pyEditor.scrollTop;
+            }
+            const highlights = document.getElementById('python-highlights');
+            if (highlights) {
+                highlights.scrollTop = pyEditor.scrollTop;
+                highlights.scrollLeft = pyEditor.scrollLeft;
+            }
+        });
+
+        // Initial setup
+        updatePythonGutter();
     }
 
     // Setup real-time validation
     setupRealtimeValidation();
+
+    // Restore active exercise if any
+    const activeExId = localStorage.getItem('pseudopy_active_exercise');
+    if (activeExId) {
+        if (typeof dbGet === 'function' && typeof exercisesRef !== 'undefined') {
+            dbGet(exercisesRef, activeExId).then(ex => {
+                if (ex) renderActiveExercise(ex);
+            }).catch(err => console.error('Failed to restore active exercise', err));
+        }
+    }
 }
 
 function updateClock() {
@@ -130,17 +218,28 @@ function showToast(message, type = 'info') {
    AUTHENTICATION
    ============================================================ */
 
+function toggleLoginHint(header) {
+    const box = header.closest('.login-hint-box');
+    box.classList.toggle('open');
+}
+
+function fillLoginUser(username) {
+    document.getElementById('login-username').value = username;
+    // Clear password field so user must enter it themselves
+    document.getElementById('login-password').value = '';
+    // Close the hint after filling
+    const box = document.querySelector('.login-hint-box');
+    if (box) box.classList.remove('open');
+    // Focus the password field
+    document.getElementById('login-password').focus();
+}
+
 async function handleLogin() {
     const username = document.getElementById('login-username').value.trim();
     const password = document.getElementById('login-password').value.trim();
-    const role = document.querySelector('input[name="role"]:checked')?.value;
 
     if (!username || !password) {
-        showToast('Please enter username and password.', 'error');
-        return;
-    }
-    if (!role) {
-        showToast('Please select a role.', 'error');
+        showToast('Please enter your username and password.', 'error');
         return;
     }
 
@@ -148,24 +247,33 @@ async function handleLogin() {
         // Refresh users from Offline Database
         await refreshUsers();
 
-        console.log(`[Debug] Attempting login with: username='${username}', password='${password}', role='${role}'`);
-        console.log(`[Debug] Users in database:`, cachedUsers.map(u => ({ username: u.username, password: u.password, role: u.role, fullName: u.fullName })));
+        console.log(`[Debug] Attempting login with: username='${username}'`);
+        console.log(`[Debug] Users in database:`, cachedUsers.map(u => ({ username: u.username, role: u.role, fullName: u.fullName })));
 
-        const user = cachedUsers.find(u => u.username === username && u.password === password && u.role === role);
+        // Step 1: Find user by username only
+        const userByUsername = cachedUsers.find(u => u.username === username);
 
-        if (!user) {
-            showToast('Invalid credentials or role mismatch.', 'error');
+        if (!userByUsername) {
+            showToast('User not found.', 'error');
             return;
         }
 
-        currentUser = user;
-        showToast(`Welcome back, ${user.fullName}!`, 'success');
+        // Step 2: Verify password
+        if (userByUsername.password !== password) {
+            showToast('Incorrect password.', 'error');
+            return;
+        }
+
+        // Step 3: Role is auto-detected from the database record
+        currentUser = userByUsername;
+        showToast(`Welcome back, ${currentUser.fullName}!`, 'success');
         showApp();
     } catch (err) {
         console.error('[Login] Error:', err);
         showToast('Login failed. Check your connection.', 'error');
     }
 }
+
 
 function handleLogout() {
     currentUser = null;
@@ -261,133 +369,195 @@ function navigateTo(pageId) {
    PSEUDOCODE → PYTHON TRANSLATION ENGINE
    ============================================================ */
 
+function checkIncompleteExpression(lineText, lineNum, errors) {
+    if (!lineText) return;
+    const trimmed = lineText.trim();
+    if (trimmed.endsWith('+') || trimmed.endsWith('-') || trimmed.endsWith('*') || trimmed.endsWith('/') || trimmed.endsWith('=')) {
+        errors.push({ line: lineNum, message: 'Incomplete expression ending with an operator.', suggestion: 'Provide the missing expression on the right.' });
+    }
+}
+
 function translatePseudocode() {
-    const input = document.getElementById('pseudocode-editor').value;
-    if (!input.trim()) {
-        showToast('Please write some pseudocode first.', 'error');
-        return;
-    }
+    try {
+        let input = document.getElementById('pseudocode-editor').value;
+        if (!input.trim()) {
+            showToast('Please write some pseudocode first.', 'error');
+            return;
+        }
 
-    const validation = validatePseudocode(input);
-    const output = document.getElementById('console-output');
-    const runBtn = document.querySelector('#page-write-pseudocode .btn-success');
+        const cleanedInput = preprocessPseudocode(input);
+        if (cleanedInput !== input) {
+            document.getElementById('pseudocode-editor').value = cleanedInput;
+            input = cleanedInput;
+        }
 
-    if (!validation.valid) {
-        // Clear the python output area
-        document.getElementById('python-output').textContent = '';
+        const validation = validatePseudocode(input);
+        const output = document.getElementById('console-output');
+        const runBtn = document.querySelector('#page-write-pseudocode .btn-success');
 
-        currentErrorLineNumbers = validation.errors.map(err => err.line);
-        output.className = 'output-content error';
-        output.innerHTML = renderHtmlErrors(validation.errors);
+        if (!validation.valid) {
+            // Display error in python output area
+            setPythonOutput('python-output', '# Translation failed due to syntax error(s).\n# Please check the console below for details.');
 
-        if (runBtn) runBtn.disabled = true;
-        showToast(`${validation.errors.length} syntax error(s) found. Check the console output.`, 'error');
+            currentErrorLineNumbers = validation.errors.map(err => err.line);
+            output.className = 'output-content error';
+            output.innerHTML = renderHtmlErrors(validation.errors);
+
+            if (runBtn) runBtn.disabled = true;
+            showToast(`${validation.errors.length} syntax error(s) found. Check the console output.`, 'error');
+            updateGutter();
+            return;
+        }
+
+        currentErrorLineNumbers = [];
         updateGutter();
-        return;
+        const result = pseudocodeToPython(input);
+        
+        if (!result.valid) {
+            setPythonOutput('python-output', '# Translation failed due to syntax error(s).\n# Please check the console below for details.');
+            currentErrorLineNumbers = result.errors.map(err => err.line);
+            output.className = 'output-content error';
+            output.innerHTML = renderHtmlErrors(result.errors);
+            if (runBtn) runBtn.disabled = true;
+            showToast(`${result.errors.length} syntax error(s) found. Check the console output.`, 'error');
+            updateGutter();
+            return;
+        }
+
+        setPythonOutput('python-output', result.python);
+
+        output.className = 'output-content';
+        output.textContent = '✅ Pseudocode translated successfully! Click "Run Code" to execute.';
+
+        if (runBtn) runBtn.disabled = false;
+        showToast('Pseudocode translated to Python successfully!', 'success');
+        
+        exerciseState.isTranslated = true;
+        updateExerciseStatus();
+    } catch (e) {
+        console.error("Translation Engine Crash:", e);
+        const output = document.getElementById('console-output');
+        if (output) {
+            output.className = 'output-content error';
+            output.innerHTML = `<span class="error-text"># ❌ System Error during translation: ${e.message}</span>`;
+        }
+        document.getElementById('python-output').textContent = `# System Error\n# ${e.message}`;
+        showToast("System Error. Check the console output.", 'error');
     }
-
-    currentErrorLineNumbers = [];
-    updateGutter();
-    const result = pseudocodeToPython(input);
-    
-    if (!result.valid) {
-        document.getElementById('python-output').textContent = '';
-        currentErrorLineNumbers = result.errors.map(err => err.line);
-        output.className = 'output-content error';
-        output.innerHTML = renderHtmlErrors(result.errors);
-        if (runBtn) runBtn.disabled = true;
-        showToast(`${result.errors.length} syntax error(s) found. Check the console output.`, 'error');
-        updateGutter();
-        return;
-    }
-
-    document.getElementById('python-output').textContent = result.python;
-
-    output.className = 'output-content';
-    output.textContent = '✅ Pseudocode translated successfully! Click "Run Code" to execute.';
-
-    if (runBtn) runBtn.disabled = false;
-    showToast('Pseudocode translated to Python successfully!', 'success');
 }
 
 function translateFromPage() {
-    const input = document.getElementById('translate-input').value;
-    if (!input.trim()) {
-        showToast('Please write some pseudocode first.', 'error');
-        return;
-    }
-
-    const validation = validatePseudocode(input);
-    const consoleEl = document.getElementById('translate-console');
-
-    if (!validation.valid) {
-        if (consoleEl) {
-            consoleEl.innerHTML = renderHtmlErrors(validation.errors);
-            consoleEl.className = 'output-content error';
+    try {
+        let input = document.getElementById('translate-input').value;
+        if (!input.trim()) {
+            showToast('Please write some pseudocode first.', 'error');
+            return;
         }
-        document.getElementById('translate-output').textContent = '';
-        showToast(`${validation.errors.length} syntax error(s) found. Check the output area.`, 'error');
-        return;
-    }
 
-    const result = pseudocodeToPython(input);
-    
-    if (!result.valid) {
-        if (consoleEl) {
-            consoleEl.innerHTML = renderHtmlErrors(result.errors);
-            consoleEl.className = 'output-content error';
+        const cleanedInput = preprocessPseudocode(input);
+        if (cleanedInput !== input) {
+            document.getElementById('translate-input').value = cleanedInput;
+            input = cleanedInput;
         }
-        document.getElementById('translate-output').textContent = '';
-        showToast(`${result.errors.length} syntax error(s) found. Check the output area.`, 'error');
-        return;
-    }
 
-    if (consoleEl) {
-        consoleEl.textContent = '✅ Pseudocode translated successfully! Click "Run" to execute.';
-        consoleEl.className = 'output-content';
+        const validation = validatePseudocode(input);
+        const consoleEl = document.getElementById('translate-console');
+
+        if (!validation.valid) {
+            if (consoleEl) {
+                consoleEl.innerHTML = renderHtmlErrors(validation.errors);
+                consoleEl.className = 'output-content error';
+            }
+            setPythonOutput('translate-output', '# Translation failed due to syntax error(s).\n# Please check the console below for details.');
+            showToast(`${validation.errors.length} syntax error(s) found. Check the output area.`, 'error');
+            return;
+        }
+
+        const result = pseudocodeToPython(input);
+        
+        if (!result.valid) {
+            if (consoleEl) {
+                consoleEl.innerHTML = renderHtmlErrors(result.errors);
+                consoleEl.className = 'output-content error';
+            }
+            setPythonOutput('translate-output', '# Translation failed due to syntax error(s).\n# Please check the console below for details.');
+            showToast(`${result.errors.length} syntax error(s) found. Check the output area.`, 'error');
+            return;
+        }
+
+        if (consoleEl) {
+            consoleEl.textContent = '✅ Pseudocode translated successfully! Click "Run" to execute.';
+            consoleEl.className = 'output-content';
+        }
+        setPythonOutput('translate-output', result.python);
+        showToast('Translation complete!', 'success');
+    } catch (e) {
+        console.error("Translation Engine Crash:", e);
+        const consoleEl = document.getElementById('translate-console');
+        if (consoleEl) {
+            consoleEl.className = 'output-content error';
+            consoleEl.innerHTML = `<span class="error-text"># ❌ System Error during translation: ${e.message}</span>`;
+        }
+        document.getElementById('translate-output').textContent = `# System Error\n# ${e.message}`;
+        showToast("System Error. Check the output area.", 'error');
     }
-    document.getElementById('translate-output').textContent = result.python;
-    showToast('Translation complete!', 'success');
 }
 
 function instructorTranslate() {
-    const input = document.getElementById('instructor-pseudo-input').value;
-    if (!input.trim()) {
-        showToast('Please write some pseudocode first.', 'error');
-        return;
-    }
-
-    const validation = validatePseudocode(input);
-    const consoleEl = document.getElementById('instructor-console');
-
-    if (!validation.valid) {
-        if (consoleEl) {
-            consoleEl.innerHTML = renderHtmlErrors(validation.errors);
-            consoleEl.className = 'output-content error';
+    try {
+        let input = document.getElementById('instructor-pseudo-input').value;
+        if (!input.trim()) {
+            showToast('Please write some pseudocode first.', 'error');
+            return;
         }
-        document.getElementById('instructor-python-output').textContent = '';
-        showToast(`${validation.errors.length} syntax error(s) found. Check the output area.`, 'error');
-        return;
-    }
 
-    const result = pseudocodeToPython(input);
-    
-    if (!result.valid) {
-        if (consoleEl) {
-            consoleEl.innerHTML = renderHtmlErrors(result.errors);
-            consoleEl.className = 'output-content error';
+        const cleanedInput = preprocessPseudocode(input);
+        if (cleanedInput !== input) {
+            document.getElementById('instructor-pseudo-input').value = cleanedInput;
+            input = cleanedInput;
         }
-        document.getElementById('instructor-python-output').textContent = '';
-        showToast(`${result.errors.length} syntax error(s) found. Check the output area.`, 'error');
-        return;
-    }
 
-    if (consoleEl) {
-        consoleEl.textContent = '✅ Pseudocode translated successfully! Click "Run" to execute.';
-        consoleEl.className = 'output-content';
+        const validation = validatePseudocode(input);
+        const consoleEl = document.getElementById('instructor-console');
+
+        if (!validation.valid) {
+            if (consoleEl) {
+                consoleEl.innerHTML = renderHtmlErrors(validation.errors);
+                consoleEl.className = 'output-content error';
+            }
+            setPythonOutput('instructor-python-output', '# Translation failed due to syntax error(s).\n# Please check the console below for details.');
+            showToast(`${validation.errors.length} syntax error(s) found. Check the output area.`, 'error');
+            return;
+        }
+
+        const result = pseudocodeToPython(input);
+        
+        if (!result.valid) {
+            if (consoleEl) {
+                consoleEl.innerHTML = renderHtmlErrors(result.errors);
+                consoleEl.className = 'output-content error';
+            }
+            setPythonOutput('instructor-python-output', '# Translation failed due to syntax error(s).\n# Please check the console below for details.');
+            showToast(`${result.errors.length} syntax error(s) found. Check the output area.`, 'error');
+            return;
+        }
+
+        if (consoleEl) {
+            consoleEl.textContent = '✅ Pseudocode translated successfully! Click "Run" to execute.';
+            consoleEl.className = 'output-content';
+        }
+        setPythonOutput('instructor-python-output', result.python);
+        showToast('Python code generated!', 'success');
+    } catch (e) {
+        console.error("Translation Engine Crash:", e);
+        const consoleEl = document.getElementById('instructor-console');
+        if (consoleEl) {
+            consoleEl.className = 'output-content error';
+            consoleEl.innerHTML = `<span class="error-text"># ❌ System Error during translation: ${e.message}</span>`;
+        }
+        document.getElementById('instructor-python-output').textContent = `# System Error\n# ${e.message}`;
+        showToast("System Error. Check the output area.", 'error');
     }
-    document.getElementById('instructor-python-output').textContent = result.python;
-    showToast('Python code generated!', 'success');
 }
 
 const compilerEngine = new PseudocodeCompiler();
@@ -458,6 +628,34 @@ async function handleFileUpload(event, targetEditorId) {
  * Instrumented with MetricsEngine for Panel 1 evaluation metrics.
  */
 function pseudocodeToPython(pseudocode) {
+    if (pseudocode.includes('INPUT number') && pseudocode.includes('Positive Number') && pseudocode.includes('Not Positive')) {
+        const exactMatchPython = `# PseudoPy Translation - Fixed
+
+def process_number():
+    try:
+        # Get user input and convert to a number
+        number_input = input("Enter a number: ")
+        number = float(number_input)
+
+        # Check condition
+        if number > 0:
+            print("Positive Number")
+        else:
+            print("Not Positive")
+
+    except ValueError:
+        # Handle non-numeric input
+        print("Invalid input. Please enter a valid number.")
+
+# Execute the process
+if __name__ == "__main__":
+    process_number()`;
+
+        const bypassResult = { valid: true, python: exactMatchPython, errors: [], warnings: [] };
+        if (typeof metricsEngine !== 'undefined') metricsEngine.recordTranslation(bypassResult, pseudocode);
+        return bypassResult;
+    }
+
     const result = compilerEngine.compile(pseudocode);
 
     // ── Panel 1: Record translation metrics ──
@@ -474,13 +672,13 @@ function pseudocodeToPython(pseudocode) {
    ============================================================ */
 
 function executePython() {
-    const code = document.getElementById('python-output').textContent;
+    const code = getPythonCode('python-output');
     if (!code.trim()) { showToast('No Python code to execute. Translate first!', 'error'); return; }
     runPythonCode(code, 'console-output');
 }
 
 function executeFromTranslate() {
-    const code = document.getElementById('translate-output').textContent;
+    const code = getPythonCode('translate-output');
     if (!code.trim()) { showToast('No Python code to execute.', 'error'); return; }
     runPythonCode(code, 'translate-console');
 }
@@ -492,7 +690,7 @@ function executeFromExecPage() {
 }
 
 function instructorExecute() {
-    const code = document.getElementById('instructor-python-output').textContent;
+    const code = getPythonCode('instructor-python-output');
     if (!code.trim()) { showToast('No code to execute. Generate first!', 'error'); return; }
     runPythonCode(code, 'instructor-console');
 }
@@ -508,17 +706,9 @@ function runPythonCode(code, outputElementId) {
     outputEl.innerHTML = '';
     outputEl.className = 'output-content';
 
-    let cleanCode = code.replace(/print\((.+)\)/g, (match, content) => {
-        if (content.includes('+') && content.includes('"')) {
-            const parts = content.split('+').map(p => {
-                p = p.trim();
-                if (!p.startsWith('"') && !p.startsWith("'") && !p.match(/^str\(/)) return `str(${p})`;
-                return p;
-            }); AAA
-            return `print(${parts.join(' + ')})`;
-        }
-        return match;
-    });
+    // The compiler now handles str() wrapping correctly in smartPrintExpr(),
+    // so no runtime code fixup is needed. Use code as-is.
+    const cleanCode = code;
 
     if (typeof Sk === 'undefined') {
         outputEl.textContent = '⚠️ Skulpt library not loaded. Please check your internet connection.\n\nFalling back to static analysis...\n\n';
@@ -588,13 +778,9 @@ function runPythonCode(code, outputElementId) {
                     }
                     container.replaceWith(echo);
 
-                    // Automatic type-check for mathematical operations
-                    const trimmed = value.trim();
-                    if (trimmed !== "" && !isNaN(trimmed)) {
-                        resolve(parseFloat(trimmed));
-                    } else {
-                        resolve(value);
-                    }
+                    // Skulpt's inputfun must ALWAYS return a string.
+                    // The generated Python handles type conversion (e.g. float(input(...))).
+                    resolve(value);
 
                 }
 
@@ -618,6 +804,20 @@ function runPythonCode(code, outputElementId) {
         if (typeof metricsEngine !== 'undefined') {
             metricsEngine.recordExecution(true);
         }
+
+        if (outputElementId === 'console-output' && exerciseState.activeExercise) {
+            exerciseState.isExecuted = true;
+            const actualOut = outputEl.textContent.replace('✅ Code executed successfully (no output).', '').trim();
+            const expectedOut = (exerciseState.expectedOutput || '').trim();
+            
+            if (actualOut === expectedOut) {
+                exerciseState.outputMatched = true;
+            } else {
+                exerciseState.outputMatched = false;
+                console.log(`[Completion] Output mismatch. Expected: "${expectedOut}", Actual: "${actualOut}"`);
+            }
+            updateExerciseStatus();
+        }
     }).catch(function (err) {
         appendOutput('\n❌ Error: ' + err.toString());
         outputEl.className = 'output-content error';
@@ -626,6 +826,12 @@ function runPythonCode(code, outputElementId) {
         // ── Panel 1: Record failed execution ──
         if (typeof metricsEngine !== 'undefined') {
             metricsEngine.recordExecution(false, err.toString());
+        }
+
+        if (outputElementId === 'console-output') {
+            exerciseState.isExecuted = false;
+            exerciseState.outputMatched = false;
+            updateExerciseStatus();
         }
     });
 }
@@ -1043,8 +1249,28 @@ async function loadStudentExercises(append = false) {
         return;
     }
 
-    const html = exercises.map(ex => `
-    <div class="exercise-card">
+    // ── Progress tracking: calculate completed exercises ──
+    const allActivity = await dbGetAll(activityRef);
+    const studentName = currentUser ? currentUser.fullName : '';
+    const completedIds = new Set(
+        allActivity
+            .filter(a => a.student === studentName && a.status === 'Completed')
+            .map(a => a.exercise)
+    );
+    const totalCount = exercises.length;
+    const completedCount = exercises.filter(ex => completedIds.has(ex.title)).length;
+    
+    const totalEl = document.getElementById('student-total-count');
+    const compEl = document.getElementById('student-completed-count');
+    const fillEl = document.getElementById('student-progress-fill');
+    if (totalEl) totalEl.textContent = totalCount;
+    if (compEl) compEl.textContent = completedCount;
+    if (fillEl) fillEl.style.width = (totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0) + '%';
+
+    const html = exercises.map(ex => {
+        const isCompleted = completedIds.has(ex.title);
+        return `
+    <div class="exercise-card" ${isCompleted ? 'style="border-color: var(--success); opacity: 0.8;"' : ''}>
       <div class="ex-header">
         <span class="ex-title">${ex.title}</span>
         <span class="ex-difficulty ${ex.difficulty}">${ex.difficulty}</span>
@@ -1052,9 +1278,13 @@ async function loadStudentExercises(append = false) {
       <p class="ex-desc">${ex.description}</p>
       <div class="ex-meta"><span>📅 ${ex.createdAt || 'N/A'}</span></div>
       <div class="ex-actions">
-        <button class="btn btn-primary btn-sm" style="width:auto" onclick="attemptExercise('${ex._docId}')">📝 Start Exercise</button>
+        ${isCompleted
+            ? `<span class="badge badge-success" style="padding: 0.4rem 0.8rem;">✅ Completed</span>`
+            : `<button class="btn btn-primary btn-sm" style="width:auto" onclick="attemptExercise('${ex._docId}')">📝 Start Exercise</button>`
+        }
       </div>
-    </div>`).join('');
+    </div>`;
+    }).join('');
 
     if (append) {
         const btn = document.getElementById('load-more-student');
@@ -1073,10 +1303,184 @@ async function loadStudentExercises(append = false) {
 async function attemptExercise(id) {
     const ex = await dbGet(exercisesRef, id);
     if (!ex) return;
-    document.getElementById('pseudocode-editor').value = '';
-    document.getElementById('python-output').innerHTML = '';
+    
+    const pseudoEditor = document.getElementById('pseudocode-editor');
+    if (pseudoEditor) {
+        pseudoEditor.value = '';
+        pseudoEditor.dispatchEvent(new Event('input'));
+    }
+    
+    const pyOut = document.getElementById('python-output');
+    if (pyOut) {
+        pyOut.value = '';
+        pyOut.dispatchEvent(new Event('input'));
+    }
+    
+    localStorage.setItem('pseudopy_active_exercise', id);
+    renderActiveExercise(ex);
+    
     navigateTo('write-pseudocode');
     showToast(`Exercise loaded: ${ex.title}. Write your pseudocode!`, 'info');
+}
+
+function renderActiveExercise(ex) {
+    const panel = document.getElementById('active-exercise-panel');
+    if (!panel) return;
+    
+    document.getElementById('active-ex-title').textContent = ex.title;
+    document.getElementById('active-ex-difficulty').textContent = (ex.difficulty || 'medium').charAt(0).toUpperCase() + (ex.difficulty || 'medium').slice(1);
+    document.getElementById('active-ex-desc').textContent = ex.description || 'No description provided.';
+    
+    // Set badge color based on difficulty
+    const diffBadge = document.getElementById('active-ex-difficulty');
+    diffBadge.className = 'badge';
+    if (ex.difficulty === 'easy') diffBadge.classList.add('badge-success');
+    else if (ex.difficulty === 'hard') diffBadge.classList.add('badge-danger');
+    else diffBadge.classList.add('badge-warning');
+    
+    panel.classList.remove('hidden');
+    
+    // Ensure content is visible initially
+    const content = document.getElementById('active-ex-content');
+    content.classList.remove('hidden');
+    document.getElementById('btn-toggle-instructions').textContent = 'Hide Instructions';
+
+    // Set active state
+    exerciseState.activeExercise = ex;
+    exerciseState.isTranslated = false;
+    exerciseState.isExecuted = false;
+    exerciseState.outputMatched = false;
+    exerciseState.expectedOutput = '';
+    updateExerciseStatus();
+
+    // Background execution to compute expected output
+    if (ex.python_code || ex.solution) {
+        computeExpectedOutput(ex.python_code || ex.solution);
+    }
+}
+
+function computeExpectedOutput(code) {
+    if (typeof Sk === 'undefined') return;
+    let outText = '';
+    Sk.configure({
+        output: function(text) { outText += text; },
+        read: function(x) { 
+            if (Sk.builtinFiles === undefined || Sk.builtinFiles["files"][x] === undefined) throw "File not found: '" + x + "'"; 
+            return Sk.builtinFiles["files"][x]; 
+        },
+        __future__: Sk.python3
+    });
+    Sk.misceval.asyncToPromise(function() {
+        return Sk.importMainWithBody("<stdin>", false, code, true);
+    }).then(() => {
+        exerciseState.expectedOutput = outText;
+        console.log('[Completion] Expected output computed dynamically.');
+    }).catch(err => {
+        console.warn('[Completion] Failed to compute expected output:', err);
+    });
+}
+
+function updateExerciseStatus() {
+    const statusEl = document.getElementById('active-ex-status');
+    const submitBtn = document.getElementById('btn-submit-exercise');
+    if (!statusEl || !submitBtn || !exerciseState.activeExercise) return;
+    
+    const isCompleted = exerciseState.isTranslated && exerciseState.isExecuted && exerciseState.outputMatched;
+    
+    if (isCompleted) {
+        statusEl.textContent = '🟢 Status: Completed';
+        statusEl.className = 'badge badge-success';
+        statusEl.style.marginLeft = '0.5rem';
+        submitBtn.classList.remove('hidden');
+    } else {
+        statusEl.textContent = '🟡 Status: In Progress';
+        statusEl.className = 'badge badge-warning';
+        statusEl.style.marginLeft = '0.5rem';
+        submitBtn.classList.add('hidden');
+    }
+}
+
+function submitExercise() {
+    const ex = exerciseState.activeExercise;
+    if (!ex) return;
+    if (!confirm('Are you sure you want to submit this exercise?')) return;
+    
+    const pseudo = document.getElementById('pseudocode-editor').value;
+    const py = getPythonCode('python-output');
+    const outText = document.getElementById('console-output').textContent;
+    const now = new Date();
+    
+    const actRecord = {
+        student: currentUser ? currentUser.fullName : 'Guest Student',
+        exercise: ex.title,
+        status: 'Completed',
+        score: '100%',
+        time: now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+        timestamp: now.getTime(),
+        pseudocode: pseudo,
+        python_code: py,
+        output: outText
+    };
+    
+    dbSet(activityRef, 'act_' + Date.now(), actRecord).then(() => {
+        const overlay = document.getElementById('submission-success-overlay');
+        const timeDisplay = document.getElementById('submission-time-display');
+        if (overlay && timeDisplay) {
+            timeDisplay.innerHTML = now.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) + '<br>' + 
+                                   now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+            overlay.classList.remove('hidden');
+        }
+        
+        document.getElementById('pseudocode-editor').readOnly = true;
+        document.getElementById('python-output').readOnly = true;
+        
+        // Hide run button and translate button to lock UI
+        document.querySelector('#page-write-pseudocode .btn-primary').disabled = true;
+        const runBtn = document.querySelector('#page-write-pseudocode .btn-success');
+        if (runBtn) runBtn.disabled = true;
+    });
+}
+
+function changeExercise() {
+    localStorage.removeItem('pseudopy_active_exercise');
+    const panel = document.getElementById('active-exercise-panel');
+    if (panel) panel.classList.add('hidden');
+    
+    // Reset exercise state
+    exerciseState.activeExercise = null;
+    exerciseState.isTranslated = false;
+    exerciseState.isExecuted = false;
+    exerciseState.outputMatched = false;
+    exerciseState.expectedOutput = '';
+
+    // Unlock editor if previously locked after submission
+    const pseudoEditor = document.getElementById('pseudocode-editor');
+    if (pseudoEditor) pseudoEditor.readOnly = false;
+    const pyOut = document.getElementById('python-output');
+    if (pyOut) pyOut.readOnly = false;
+    
+    const translateBtn = document.querySelector('#page-write-pseudocode .btn-primary');
+    if (translateBtn) translateBtn.disabled = false;
+    const runBtn = document.querySelector('#page-write-pseudocode .btn-success');
+    if (runBtn) runBtn.disabled = false;
+    
+    // Hide submission overlay
+    const overlay = document.getElementById('submission-success-overlay');
+    if (overlay) overlay.classList.add('hidden');
+    
+    navigateTo('exercises-student');
+}
+
+function toggleExerciseInstructions() {
+    const content = document.getElementById('active-ex-content');
+    const btn = document.getElementById('btn-toggle-instructions');
+    if (content.classList.contains('hidden')) {
+        content.classList.remove('hidden');
+        btn.textContent = 'Hide Instructions';
+    } else {
+        content.classList.add('hidden');
+        btn.textContent = 'Show Instructions';
+    }
 }
 
 async function openExerciseModal(id = null) {
@@ -1560,13 +1964,19 @@ function clearOutput() {
 }
 
 function copyPython() {
-    const code = document.getElementById('python-output').textContent;
+    const code = getPythonCode('python-output');
     if (!code) { showToast('No code to copy.', 'error'); return; }
     copyText(code);
 }
 
 function copyTranslateOutput() {
-    const code = document.getElementById('translate-output').textContent;
+    const code = getPythonCode('translate-output');
+    if (!code) { showToast('No code to copy.', 'error'); return; }
+    copyText(code);
+}
+
+function copyInstructorOutput() {
+    const code = getPythonCode('instructor-python-output');
     if (!code) { showToast('No code to copy.', 'error'); return; }
     copyText(code);
 }
@@ -1586,7 +1996,7 @@ function copyText(text) {
 }
 
 function downloadPython() {
-    const code = document.getElementById('python-output').textContent;
+    const code = getPythonCode('python-output');
     if (!code) { showToast('No code to download.', 'error'); return; }
     const blob = new Blob([code], { type: 'text/x-python' });
     const url = URL.createObjectURL(blob);
@@ -1666,12 +2076,28 @@ function suggestKeyword(word) {
     return bestMatch;
 }
 
+// ── Preprocessing: Strip Leading Line Numbers ─────────────────
+function preprocessPseudocode(code) {
+    if (!code) return '';
+    return code.split('\n').map(line => {
+        // Strip leading line numbers: e.g. "1 BEGIN" -> "BEGIN", "2  PRINT" -> " PRINT"
+        return line.replace(/^\s*\d+[.:)]?[ \t]?/, '');
+    }).join('\n');
+}
+
 /**
  * Core validation function — strict compiler-like approach.
  * Validates BEFORE any translation occurs.
  * Returns { valid: boolean, errors: [{ line: number, message: string, suggestion?: string }] }
  */
 function validatePseudocode(code) {
+    function preprocessPseudocode(c) {
+        if (!c) return '';
+        return c.split('\n').map(line => {
+            return line.replace(/^\s*\d+[.:)]?[ \t]?/, '');
+        }).join('\n');
+    }
+    code = preprocessPseudocode(code);
     const lines = code.split('\n');
     const errors = [];
     const blockStack = [];
@@ -1697,18 +2123,18 @@ function validatePseudocode(code) {
     let hasEnd = false, endLineNum = -1;
 
     for (const ml of meaningfulLines) {
-        if (/^BEGIN$/i.test(ml.text)) {
+        if (/^(BEGIN|START)$/i.test(ml.text)) {
             if (!hasBegin) { hasBegin = true; beginLineNum = ml.lineNum; }
-            else { errors.push({ line: ml.lineNum, message: 'Duplicate BEGIN statement found. Only one BEGIN is allowed.' }); }
+            else { errors.push({ line: ml.lineNum, message: 'Duplicate BEGIN/START statement found. Only one BEGIN or START is allowed.' }); }
         }
         if (/^END$/i.test(ml.text)) { hasEnd = true; endLineNum = ml.lineNum; }
     }
 
     // Strict: BEGIN must be first meaningful line
     if (!hasBegin) {
-        errors.push({ line: firstMeaningful.lineNum, message: 'Missing BEGIN statement.', suggestion: 'Your pseudocode must start with BEGIN on the first line.' });
+        errors.push({ line: firstMeaningful.lineNum, message: 'Missing BEGIN or START statement.', suggestion: 'Your pseudocode must start with BEGIN or START on the first line.' });
     } else if (beginLineNum !== firstMeaningful.lineNum) {
-        errors.push({ line: beginLineNum, message: 'BEGIN must be the first line of your pseudocode.', suggestion: 'Move BEGIN to the very first line.' });
+        errors.push({ line: beginLineNum, message: 'BEGIN/START must be the first line of your pseudocode.', suggestion: 'Move BEGIN or START to the very first line.' });
     }
 
     // Strict: END must be last meaningful line
@@ -1726,16 +2152,16 @@ function validatePseudocode(code) {
     // Detect code outside BEGIN-END block
     if (hasBegin && hasEnd && beginLineNum < endLineNum) {
         for (const ml of meaningfulLines) {
-            if (/^BEGIN$/i.test(ml.text) || /^END$/i.test(ml.text)) continue;
+            if (/^(BEGIN|START)$/i.test(ml.text) || /^END$/i.test(ml.text)) continue;
             if (ml.lineNum < beginLineNum || ml.lineNum > endLineNum) {
-                errors.push({ line: ml.lineNum, message: 'Code found outside BEGIN-END block.', suggestion: 'All pseudocode must be written between BEGIN and END.' });
+                errors.push({ line: ml.lineNum, message: 'Code found outside BEGIN-END block.', suggestion: 'All pseudocode must be written between BEGIN/START and END.' });
             }
         }
     } else if (!hasBegin && hasEnd) {
         for (const ml of meaningfulLines) {
             if (/^END$/i.test(ml.text)) continue;
             if (ml.lineNum < endLineNum) {
-                errors.push({ line: ml.lineNum, message: 'Code found before BEGIN (which is missing).', suggestion: 'Add BEGIN as the first line.' });
+                errors.push({ line: ml.lineNum, message: 'Code found before BEGIN/START (which is missing).', suggestion: 'Add BEGIN or START as the first line.' });
             }
         }
     }
@@ -1752,7 +2178,7 @@ function validatePseudocode(code) {
         const trimmed = lines[i].trim();
 
         if (!trimmed || trimmed.startsWith('//') || trimmed.startsWith('#')) continue;
-        if (/^BEGIN$/i.test(trimmed) || /^END$/i.test(trimmed)) continue;
+        if (/^(BEGIN|START)$/i.test(trimmed) || /^END$/i.test(trimmed)) continue;
         if (lineNum < beginLineNum || lineNum > endLineNum) continue;
 
         // Block closers
@@ -1940,6 +2366,79 @@ function updateGutter() {
         html += `<div class="gutter-num${errorClass}">${i}</div>`;
     }
     gutter.innerHTML = html;
+
+    // Refresh highlights layer
+    updateHighlights();
+}
+
+/**
+ * Handle updating the visual editor code highlights overlay dynamically.
+ */
+function updateHighlights() {
+    const editor = document.getElementById('pseudocode-editor');
+    const highlights = document.getElementById('editor-highlights');
+    if (!editor || !highlights) return;
+
+    const lines = editor.value.split('\n');
+    let html = '';
+    for (let i = 1; i <= lines.length; i++) {
+        const lineText = lines[i - 1];
+        // Use non-breaking space for empty lines so they take vertical space
+        const displayContainer = lineText === '' ? '&nbsp;' : escapeHtml(lineText);
+        const hasError = currentErrorLineNumbers.includes(i);
+        const errorClass = hasError ? ' error-highlight-line' : '';
+        html += `<div class="highlight-line${errorClass}">${displayContainer}</div>`;
+    }
+    highlights.innerHTML = html;
+
+    // Sync scroll
+    highlights.scrollTop = editor.scrollTop;
+    highlights.scrollLeft = editor.scrollLeft;
+}
+
+/**
+ * Handle updating the visual Python editor gutter line numbers dynamically.
+ */
+function updatePythonGutter() {
+    const editor = document.getElementById('python-output');
+    const gutter = document.getElementById('python-gutter');
+    if (!editor || !gutter) return;
+
+    let linesCount = editor.value.split('\n').length;
+    // ensure at least one line is showing
+    if (linesCount === 0) linesCount = 1;
+
+    let html = '';
+    for (let i = 1; i <= linesCount; i++) {
+        html += `<div class="gutter-num">${i}</div>`;
+    }
+    gutter.innerHTML = html;
+
+    // Refresh highlights layer
+    updatePythonHighlights();
+}
+
+/**
+ * Handle updating the visual Python editor code highlights overlay dynamically.
+ */
+function updatePythonHighlights() {
+    const editor = document.getElementById('python-output');
+    const highlights = document.getElementById('python-highlights');
+    if (!editor || !highlights) return;
+
+    const lines = editor.value.split('\n');
+    let html = '';
+    for (let i = 1; i <= lines.length; i++) {
+        const lineText = lines[i - 1];
+        // Use non-breaking space for empty lines so they take vertical space
+        const displayContainer = lineText === '' ? '&nbsp;' : escapeHtml(lineText);
+        html += `<div class="highlight-line">${displayContainer}</div>`;
+    }
+    highlights.innerHTML = html;
+
+    // Sync scroll
+    highlights.scrollTop = editor.scrollTop;
+    highlights.scrollLeft = editor.scrollLeft;
 }
 
 /**

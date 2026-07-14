@@ -1355,3 +1355,5 @@ class PseudocodeCompiler {
         return 'O(N^' + maxDepth + ')';
     }
 }
+
+module.exports = { PseudocodeCompiler };

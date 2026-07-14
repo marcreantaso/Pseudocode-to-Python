@@ -17,10 +17,17 @@ function initDB() {
     return new Promise((resolve, reject) => {
         if (dbInstance) return resolve(dbInstance);
         
-        const request = indexedDB.open('pseudopy_db', 1);
+        const request = indexedDB.open('pseudopy_db', 2);
         
         request.onupgradeneeded = (e) => {
             const db = e.target.result;
+            const oldVersion = e.oldVersion;
+
+            // v1 → v2: clear users store so new usernames are re-seeded
+            if (oldVersion < 2 && db.objectStoreNames.contains(usersRef)) {
+                db.deleteObjectStore(usersRef);
+            }
+
             if (!db.objectStoreNames.contains(usersRef)) {
                 db.createObjectStore(usersRef, { keyPath: '_docId' });
             }
@@ -146,10 +153,10 @@ async function dbDelete(ref, docId) {
 // ══════════════════════════════════════════════════════════════
 
 const SEED_USERS = [
-    { _docId: 'u1', id: 'u1', fullName: 'Mark Bautista', username: 'mbautista', email: 'bautista@university.edu.ph', password: 'admin123', role: 'admin', status: 'active' },
-    { _docId: 'u2', id: 'u2', fullName: 'Marc Reantaso', username: 'mreantaso', email: 'reantaso@university.edu.ph', password: 'pass123', role: 'instructor', status: 'active' },
-    { _docId: 'u3', id: 'u3', fullName: 'Eduard Mirandilla', username: 'emirandilla', email: 'mirandilla@student.edu.ph', password: 'pass123', role: 'student', status: 'active' },
-    { _docId: 'u4', id: 'u4', fullName: 'Mikaella Daet', username: 'mdaet', email: 'daet@student.edu.ph', password: 'pass123', role: 'student', status: 'active' },
+    { _docId: 'u1', id: 'u1', fullName: 'Mark Bautista', username: 'mbautista_admin', email: 'bautista@university.edu.ph', password: 'admin123', role: 'admin', status: 'active' },
+    { _docId: 'u2', id: 'u2', fullName: 'Marc Reantaso', username: 'mreantaso_instructor', email: 'reantaso@university.edu.ph', password: 'pass123', role: 'instructor', status: 'active' },
+    { _docId: 'u3', id: 'u3', fullName: 'Eduard Mirandilla', username: 'emirandilla_student', email: 'mirandilla@student.edu.ph', password: 'pass123', role: 'student', status: 'active' },
+    { _docId: 'u4', id: 'u4', fullName: 'Mikaella Daet', username: 'mdaet_student', email: 'daet@student.edu.ph', password: 'pass123', role: 'student', status: 'active' },
 ];
 
 const SEED_ACTIVITY = [
