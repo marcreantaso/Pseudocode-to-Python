@@ -819,9 +819,7 @@ class SemanticAnalyzer {
                 this.checkExpr(node.expr);
                 break;
             case 'InputStatement':
-                // Check if variable name suggests a string
-                const isStringInput = /name|str|txt|text|msg|message|char/i.test(node.id);
-                this.symbolTable.set(node.id, { type: isStringInput ? 'string' : 'numeric' });
+                // Do not force type yet
                 break;
 
             case 'IfStatement':
@@ -930,9 +928,10 @@ class SemanticAnalyzer {
 // The generated code is compatible with Skulpt's print() capture.
 // ══════════════════════════════════════════════════════════════
 class CodeGenerator {
-    constructor() {
+    constructor(symbolTable) {
         this.indentLevel = 0;   // Global indent_level
         this.lines = [];
+        this.symbolTable = symbolTable || new Map();
     }
 
     ind() {
@@ -1090,9 +1089,9 @@ class CodeGenerator {
             }
 
 
-            case 'InputStatement':
-                // If the variable name suggests a string, do not wrap in float()
-                const isStringNode = /name|str|txt|text|msg|message|char/i.test(node.id);
+            case 'InputStatement': {
+                const symInfo = this.symbolTable.get(node.id);
+                const isStringNode = (symInfo && symInfo.type === 'string') || /name|str|txt|text|msg|message|char/i.test(node.id);
                 if (isStringNode) {
                     if (node.prompt && node.prompt.length > 0) {
                         this.lines.push(this.ind() + node.id + ' = input(' + node.prompt[0].value + ')');
@@ -1107,6 +1106,7 @@ class CodeGenerator {
                     }
                 }
                 break;
+            }
 
 
 
@@ -1148,7 +1148,7 @@ class CodeGenerator {
                 break;
 
             case 'ForStatement':
-                this.lines.push(this.ind() + 'for ' + node.iterator + ' in range(' + this.exprToStr(node.startExpr.tokens) + ', ' + this.exprToStr(node.endExpr.tokens) + ' + 1):');
+                this.lines.push(this.ind() + 'for ' + node.iterator + ' in range(int(' + this.exprToStr(node.startExpr.tokens) + '), int(' + this.exprToStr(node.endExpr.tokens) + ') + 1):');
                 this.indentLevel++;
                 if (this.isBodyEffectivelyEmpty(node.body)) this.lines.push(this.ind() + 'pass');
                 else node.body.forEach(n => this.visitNode(n));
@@ -1307,7 +1307,7 @@ class PseudocodeCompiler {
 
         // ── Stage 4: Code Generation (SDT tree-walk) ──
         const t4 = performance.now();
-        const generator = new CodeGenerator();
+        const generator = new CodeGenerator(semanticAnalyzer.symbolTable);
         const pythonCode = generator.generate(ast);
         metrics.codeGenTime = parseFloat((performance.now() - t4).toFixed(3));
 
